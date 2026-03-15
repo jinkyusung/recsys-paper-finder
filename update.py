@@ -20,7 +20,7 @@ def process_bib_file(bib_path, csv_path, conference_name):
     conference_name is extracted from the folder name (e.g., 'cikm', 'sigir').
     """
     # [MODIFIED] Added 'Author'
-    csv_headers = ['Title', 'Author', 'Conference Name (Book Title)', 'Year', 'Abstract', 'url', 'Keywords']
+    csv_headers = ['Title', 'Author', 'Conference Name (Book Title)', 'Year', 'Abstract', 'url', 'Keywords', 'Source_File']
     
     try:
         with open(bib_path, 'r', encoding='utf-8') as bibfile:
@@ -42,7 +42,8 @@ def process_bib_file(bib_path, csv_path, conference_name):
                     entry.get('year', ''),
                     entry.get('abstract', ''),
                     entry.get('url', ''),
-                    entry.get('keywords', '')
+                    entry.get('keywords', ''),
+                    os.path.basename(bib_path)
                 ]
                 writer.writerow(row)
         
@@ -122,40 +123,63 @@ def sync_database(force_rebuild=False):
     if os.path.exists(LOG_FILE):
         try:
             with open(LOG_FILE, 'r', encoding='utf-8') as f:
-                processed_files = set(line.strip() for line in f)
+                processed_files = set(line.strip() for line in f if line.strip())
         except Exception as e:
             print(f"Warning: Failed to read {LOG_FILE}. Rebuild recommended. ({e})")
 
-    new_files = list(all_csv_files - processed_files)
+    db_mtime = 0
+    if os.path.exists(DB_FILE):
+        db_mtime = os.path.getmtime(DB_FILE)
+
+    new_files = []
+    for f in all_csv_files:
+        if f not in processed_files:
+            new_files.append(f)
+        elif os.path.getmtime(f) > db_mtime:
+            new_files.append(f)
     
-    if not new_files:
-        print("No new CSV files found. Database is up to date.")
+    if not new_files and not force_rebuild:
+        print("No new or updated CSV files found. Database is up to date.")
         return
         
     print(f"Processing {len(new_files)} new CSV files...")
         
     df_list = []
+    # We will keep track of which files are being updated to remove their old entries
+    updated_files = []
+    
     for f in new_files:
         try:
-            df_list.append(pd.read_csv(f))
+            df_temp = pd.read_csv(f)
+            df_list.append(df_temp)
+            updated_files.append(os.path.basename(f).replace('.csv', '.bib'))
         except Exception as e:
             print(f"Warning: Failed to load file {f}. {e}")
             
-    if not df_list:
-        print("Error: No valid data to process.")
+    if not df_list and not force_rebuild:
+        print("No valid new data to process.")
         return
 
-    new_df = pd.concat(df_list, ignore_index=True)
-    new_df['Title'] = new_df['Title'].fillna('')
-    new_df['Author'] = new_df['Author'].fillna('')
-    new_df['Abstract'] = new_df['Abstract'].fillna('')
-    new_df['Keywords'] = new_df['Keywords'].fillna('')
+    new_df = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
+    for col in ['Title', 'Author', 'Abstract', 'Keywords', 'Source_File']:
+        if col in new_df.columns:
+            new_df[col] = new_df[col].fillna('')
 
-    if os.path.exists(DB_FILE):
+    if os.path.exists(DB_FILE) and not force_rebuild:
         print("Loading and merging with existing database.")
         try:
-            old_df = pd.read_parquet(DB_FILE)
-            combined_df = pd.concat([old_df, new_df], ignore_index=True)
+            combined_df = pd.read_parquet(DB_FILE)
+            
+            # [CRITICAL] If any of the 'new_files' were actually 'updated' files, 
+            # we should remove the old entries for those bib files first.
+            if 'Source_File' in combined_df.columns:
+                initial_count = len(combined_df)
+                combined_df = combined_df[~combined_df['Source_File'].isin(updated_files)]
+                removed_count = initial_count - len(combined_df)
+                if removed_count > 0:
+                    print(f"  -> Removed {removed_count} old entries for updated files.")
+            
+            combined_df = pd.concat([combined_df, new_df], ignore_index=True)
         except Exception as e:
             print(f"Error: Failed to load existing data. Overwriting. ({e})")
             combined_df = new_df

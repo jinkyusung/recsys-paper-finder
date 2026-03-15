@@ -6,6 +6,7 @@ import re
 import logging
 from rank_bm25 import BM25Okapi
 import altair as alt
+from update import sync_csv_files, sync_database
 
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
@@ -581,6 +582,24 @@ def main():
     st.set_page_config(layout="centered", page_title="RecSys Paper Finder")
     st.markdown('<div class="app-title">RecSys Paper Finder</div>', unsafe_allow_html=True)
     st.markdown(APP_CSS, unsafe_allow_html=True)
+
+    # --- 0. Automatic Sync ---
+    if 'auto_synced' not in st.session_state:
+        with st.spinner("Checking for database updates..."):
+            sync_csv_files()
+            sync_database()
+            st.session_state.auto_synced = True
+            st.cache_data.clear()
+
+    with st.sidebar:
+        st.subheader("Database Status")
+        if st.button("🔄 Force Sync Now"):
+            with st.spinner("Syncing..."):
+                sync_csv_files(force_rebuild=True) # Allow force rebuild from UI
+                sync_database(force_rebuild=True)
+                st.cache_data.clear()
+                st.success("Full rebuild complete!")
+                st.rerun()
 
     papers_df, min_year, max_year, summary_df, bm25 = load_search_database()
 
