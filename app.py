@@ -218,6 +218,13 @@ APP_CSS = """
         flex-basis: 80px !important;
     }
 
+    .app-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #202124;
+        margin-bottom: 12px;
+        letter-spacing: -0.01em;
+    }
     .section-label {
         font-size: 1.1rem; /* Significantly larger */
         font-weight: 700;
@@ -572,7 +579,7 @@ def display_paper(row, highlight_query_str, index):
 
 def main():
     st.set_page_config(layout="centered", page_title="RecSys Paper Finder")
-    st.title("RecSys Paper Finder")
+    st.markdown('<div class="app-title">RecSys Paper Finder</div>', unsafe_allow_html=True)
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
     papers_df, min_year, max_year, summary_df, bm25 = load_search_database()
