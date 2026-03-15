@@ -598,9 +598,9 @@ def main():
         c1, c2 = st.columns([3, 1])
         with c1:
             st.markdown(f"""
-                <div style="font-size: 0.85rem; color: #5f6368; margin-bottom: 2px;">
+                <div style="font-size: 0.85rem; color: #5f6368; margin-bottom: 16px;">
                 Update your paper database by parsing current BibTeX files in the `bibtex/` folder.<br>
-                <b>Last updated:</b> {get_db_mtime()}</b></b></b></b>
+                <b>Last updated:</b> {get_db_mtime()}
                 </div>
             """, unsafe_allow_html=True)
         with c2:
