@@ -92,74 +92,62 @@ APP_CSS = """
         border: 1px solid #dadce0;
     }
 
-    /* Bottom row: keywords */
-    .gs-bottom-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 4px;
-        margin: 4px 0 2px;
-    }
-
-    /* Abstract Snippet & Toggle */
-    .gs-snippet-container {
-        font-size: 0.88rem;
-        line-height: 1.55;
-        color: #444;
-        margin-bottom: 4px;
-    }
-    .gs-snippet-text {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        color: #5f6368;
-        margin-top: 4px;
-    }
-    
-    /* When CLOSED: Show snippet and 'More' arrow */
-    details.gs-toggle:not([open]) .gs-toggle-link::after { 
-        content: "more ▾"; 
-        margin-left: 4px;
-    }
-    
-    /* When OPEN: Hide snippet, show 'Less' arrow */
-    details.gs-toggle[open] .gs-snippet-text { display: none; }
-    details.gs-toggle[open] .gs-toggle-link::after { 
-        content: "less ▴"; 
-        font-weight: 600;
-        margin-left: 0;
-    }
-
-    details.gs-toggle > summary {
+    /* Abstract & Actions Layout */
+    .gs-paper-toggle { border: none; }
+    .gs-paper-toggle > summary {
         display: block;
         outline: none;
         list-style: none;
         user-select: none;
         cursor: pointer;
     }
-    details.gs-toggle > summary::-webkit-details-marker { display: none; }
-    
-    .gs-toggle-link {
+    .gs-paper-toggle > summary::-webkit-details-marker { display: none; }
+
+    /* 2-line Preview snippet */
+    .gs-snippet-preview {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #5f6368;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        margin-top: 4px;
+        margin-bottom: 4px;
+    }
+    .gs-paper-toggle[open] .gs-snippet-preview { display: none; }
+
+    /* Fixed Actions Row (more/less + keywords) */
+    .gs-actions-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 2px;
+    }
+    .gs-toggle-btn {
         color: #1558d6;
         font-size: 0.82rem;
         font-weight: 500;
-        margin-top: 2px;
+        min-width: 50px; /* Keep consistent width */
     }
-    .gs-toggle-link:hover { text-decoration: underline; }
+    .gs-toggle-btn:hover { text-decoration: underline; }
 
-    .gs-abstract-full {
-        margin-top: 6px;
+    .gs-paper-toggle:not([open]) .gs-toggle-btn::after { content: "more ▾"; }
+    .gs-paper-toggle[open] .gs-toggle-btn::after { content: "less ▴"; font-weight: 600; }
+
+    /* Full abstract box */
+    .gs-abstract-full-box {
+        margin-top: 10px;
         font-size: 0.88rem;
         line-height: 1.6;
         color: #5f6368;
-        padding: 12px 16px;
+        padding: 14px 18px;
         background: #fdfdfd;
         border-radius: 8px;
         border: 1px solid #eef2ff;
         border-left: 4px solid #1558d6;
-        cursor: default;
     }
 
     /* Keyword highlight (Search results) */
@@ -428,31 +416,33 @@ def display_paper(row, highlight_query_str, index):
 
     meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
-    # Abstract versions: plain for preview, highlighted for full view
-    raw_abstract    = row.get('Abstract', '')
-    plain_abs       = clean_latex(raw_abstract)
-    highlighted_abs = _render_abstract(raw_abstract, highlight_query_str)
-    
-    snippet_html = f'''
-    <div class="gs-snippet-container">
-        <details class="gs-toggle">
-            <summary>
-                <div class="gs-snippet-text">{plain_abs}</div>
-                <div class="gs-toggle-link"></div>
-            </summary>
-            <div class="gs-abstract-full">{highlighted_abs}</div>
-        </details>
-    </div>
-    '''
-
-    # Keywords row
+    # Combined Action Row logic
     pills_html = generate_keyword_pills(keywords_str)
-    bottom_row = f'<div class="gs-bottom-row">{pills_html}</div>'
+    
+    # Simple assembly using the new CSS structure
+    abstract_section = f'''
+    <details class="gs-paper-toggle">
+        <summary>
+            <div class="gs-snippet-preview">{plain_abs}</div>
+            <div class="gs-actions-row">
+                <span class="gs-toggle-btn"></span>
+                {pills_html}
+            </div>
+        </summary>
+        <div class="gs-full-content">
+            <div class="gs-actions-row">
+                <span class="gs-toggle-btn"></span>
+                {pills_html}
+            </div>
+            <div class="gs-abstract-full-box">{highlighted_abs}</div>
+        </div>
+    </details>
+    '''
 
     return (
         f'<div class="gs-paper">'
         f'  <div class="gs-index-col">{index}</div>'
-        f'  <div class="gs-content-col">{title_html}{meta_html}{snippet_html}{bottom_row}</div>'
+        f'  <div class="gs-content-col">{title_html}{meta_html}{abstract_section}</div>'
         f'</div>'
     )
 
