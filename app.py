@@ -4,23 +4,11 @@ import numpy as np
 import os
 import re
 import logging
-from sentence_transformers import SentenceTransformer, util
 from rank_bm25 import BM25Okapi
 import altair as alt
 
-# HF Hub 미인증 경고 억제
-os.environ.setdefault('HF_HUB_DISABLE_IMPLICIT_TOKEN', '1')
-# sentence-transformers BertModel LOAD REPORT 억제
-logging.getLogger('sentence_transformers').setLevel(logging.ERROR)
-logging.getLogger('transformers').setLevel(logging.ERROR)
-
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
-EMBEDDING_FILE = 'paper_embeddings.npy'
-MODEL_NAME     = 'all-MiniLM-L6-v2'
-
-RECSYS_CONCEPT_QUERY     = "A paper about recommendation systems, collaborative filtering, personalization, or recommender models."
-RECSYS_CONCEPT_THRESHOLD = 0.1
 RECSYS_KEYWORDS_RAW      = ['recommend', 'collaborative filtering', 'cf', 'matrix factorization', 'personalization', 'personalized']
 RECSYS_MASTER_REGEX      = re.compile('|'.join(RECSYS_KEYWORDS_RAW), re.IGNORECASE)
 RECOMMEND_ONLY_REGEX     = re.compile(r'recommend', re.IGNORECASE)
@@ -34,7 +22,12 @@ APP_CSS = """
     .gs-paper {
         display: flex;
         flex-direction: row;
-        padding: 6px 0 2px 0;
+        padding: 12px 0 10px 0;
+        border-top: 1px solid #e8e8e8;
+    }
+    .gs-paper:first-of-type {
+        border-top: none;
+        padding-top: 2px;
     }
     /* Left: index number column */
     .gs-index-col {
@@ -51,17 +44,8 @@ APP_CSS = """
     }
     /* Right: content column */
     .gs-content-col { flex: 1; min-width: 0; }
-
-    /* Separator between entries */
-    .gs-separator {
-        border: none;
-        border-top: 1px solid #e8e8e8;
-        margin: 2px 0 0 0;
-    }
-
-    /* Title */
     .gs-title {
-        font-size: 1.08rem;
+        font-size: 1.00rem;
         font-weight: 500;
         line-height: 1.4;
         margin-bottom: 3px;
@@ -140,10 +124,18 @@ APP_CSS = """
         padding: 8px 4px 4px 4px;
     }
 
-    /* Keyword highlight */
+    /* Keyword highlight (Search results) */
     mark {
         background-color: #FFF3CD;
         color: #856404;
+        font-weight: 600;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
+    /* RecSys keyword highlight (Blue) */
+    .recsys-mark {
+        background-color: #D1E8FF;
+        color: #004085;
         font-weight: 600;
         padding: 0 2px;
         border-radius: 2px;
@@ -156,27 +148,17 @@ APP_CSS = """
 # Data loading
 # ---------------------------------------------------------------------------
 
-@st.cache_resource
-def load_model(model_name):
-    try:
-        return SentenceTransformer(model_name)
-    except Exception as e:
-        st.error(f"Error: Failed to load embedding model ({model_name}). {e}")
-        return None
-
-
 @st.cache_data
-def load_search_database(_model):
-    default = (None, None, 2000, 2025, None, None)
+def load_search_database():
+    default = (None, 2000, 2025, None, None)
 
-    if not os.path.exists(DB_FILE) or not os.path.exists(EMBEDDING_FILE):
-        st.error(f"Could not find '{DB_FILE}' or '{EMBEDDING_FILE}'.")
+    if not os.path.exists(DB_FILE):
+        st.error(f"Could not find '{DB_FILE}'.")
         st.info("Run 'python update.py --force' to build the database.")
         return default
 
     try:
-        df         = pd.read_parquet(DB_FILE)
-        embeddings = np.load(EMBEDDING_FILE)
+        df = pd.read_parquet(DB_FILE)
 
         for col in ('Title', 'Author', 'Abstract', 'Keywords'):
             df[col] = df[col].fillna('')
@@ -208,20 +190,17 @@ def load_search_database(_model):
             df['Keywords'].str.lower()
         )
 
-        # RecSys classification via sentence-transformers
-        concept_emb = _model.encode(RECSYS_CONCEPT_QUERY, normalize_embeddings=True)
-        df['recsys_score']    = util.dot_score(concept_emb, embeddings)[0].numpy()
-        df['has_recommend_keyword'] = df['search_corpus_lower'].str.contains(RECOMMEND_ONLY_REGEX, na=False, regex=True)
-        df['is_recsys'] = (
-            (df['recsys_score'] > RECSYS_CONCEPT_THRESHOLD) |
-            df['search_corpus_lower'].str.contains(RECSYS_MASTER_REGEX, na=False, regex=True)
+        # RecSys classification via keyword match count
+        df['recsys_match_count'] = df['search_corpus_lower'].apply(
+            lambda x: len(RECSYS_MASTER_REGEX.findall(x)) if isinstance(x, str) else 0
         )
+        df['is_recsys'] = df['recsys_match_count'] > 0
 
         # BM25 index
         bm25 = BM25Okapi([doc.split() for doc in df['search_corpus_lower']])
 
         st.success(f"Loaded {len(df)} papers.")
-        return df, embeddings, min_year, max_year, summary_df, bm25
+        return df, min_year, max_year, summary_df, bm25
 
     except Exception as e:
         st.error(f"Failed to load database: {e}")
@@ -289,19 +268,33 @@ def _first_author(author_str):
 
 
 def _render_abstract(text, highlight_query):
-    """Return abstract text with search terms highlighted."""
+    """Return abstract text with search terms highlighted in yellow and RecSys terms in blue."""
     if not text:
         return '<em>No abstract provided.</em>'
+    
+    # 1. Highlight RecSys terms (Blue)
+    try:
+        # Use RECSYS_KEYWORDS_RAW defined above
+        recsys_pattern = re.compile('|'.join(rf'\b{re.escape(t)}\b' if len(t) < 4 else re.escape(t) 
+                                            for t in RECSYS_KEYWORDS_RAW), re.IGNORECASE)
+        text = recsys_pattern.sub(r'<span class="recsys-mark">\g<0></span>', text)
+    except Exception:
+        pass
+
+    # 2. Highlight Search terms (Yellow)
     if not highlight_query:
         return text
     try:
         terms = [t for t in highlight_query.lower().split() if t]
         if not terms:
             return text
-        pattern = re.compile('|'.join(re.escape(t) for t in terms), re.IGNORECASE)
-        return pattern.sub(r'<mark>\g<0></mark>', text)
+        search_pattern = re.compile('|'.join(re.escape(t) for t in terms), re.IGNORECASE)
+        # To avoid highlighting terms inside already created span tags, we'd need a more complex regex.
+        # But for simple display, nested or consecutive tags are often handled okay by browsers.
+        text = search_pattern.sub(r'<mark>\g<0></mark>', text)
     except Exception:
-        return text
+        pass
+    return text
 
 
 def display_paper(row, highlight_query_str, index):
@@ -329,10 +322,8 @@ def display_paper(row, highlight_query_str, index):
     score_parts = []
     if 'BM25_Score' in row and pd.notna(row['BM25_Score']):
         score_parts.append(f"BM25&nbsp;<strong>{row['BM25_Score']:.2f}</strong>")
-    if 'recsys_score' in row and pd.notna(row['recsys_score']):
-        score_parts.append(f"RecSys&nbsp;<strong>{row['recsys_score']:.3f}</strong>")
-    has_recommend = row.get('has_recommend_keyword', False)
-    score_parts.append(f"rec&nbsp;<strong>{'✓' if has_recommend else '✗'}</strong>")
+    if 'recsys_match_count' in row and pd.notna(row['recsys_match_count']):
+        score_parts.append(f"RS Match&nbsp;<strong>{int(row['recsys_match_count'])}</strong>")
     meta_parts.append(f'<span class="gs-scores-inline">{" · ".join(score_parts)}</span>')
 
     meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
@@ -353,7 +344,6 @@ def display_paper(row, highlight_query_str, index):
         f'  <div class="gs-index-col">{index}</div>'
         f'  <div class="gs-content-col">{title_html}{meta_html}{bottom_row}</div>'
         f'</div>'
-        f'<hr class="gs-separator">'
     )
 
 
@@ -366,11 +356,7 @@ def main():
     st.title("RecSys Paper Finder")
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
-    model = load_model(MODEL_NAME)
-    if model:
-        papers_df, paper_embeddings, min_year, max_year, summary_df, bm25 = load_search_database(model)
-    else:
-        papers_df, paper_embeddings, min_year, max_year, summary_df, bm25 = (None, None, 2000, 2025, None, None)
+    papers_df, min_year, max_year, summary_df, bm25 = load_search_database()
 
     if papers_df is None:
         st.warning("Failed to load essential data. The app cannot start.")

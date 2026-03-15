@@ -6,15 +6,12 @@ import re
 import argparse
 import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 # --- Constants ---
 BIBTEX_DIR = 'bibtex'
 PAPERS_DIR = 'papers'
 DB_FILE = 'paper_database.parquet'
-EMBEDDING_FILE = 'paper_embeddings.npy'
 LOG_FILE = 'processed_files.log'
-MODEL_NAME = 'all-MiniLM-L6-v2'
 
 # --- 1. BibTeX -> CSV Conversion Module ---
 
@@ -107,19 +104,17 @@ def sync_csv_files(force_rebuild=False):
             
     print(f"CSV sync complete: Checked {total_processed} .bib files, {total_updated} updated.")
 
-# --- 2. Embedding Generation Module ---
+# --- 2. Database Generation Module ---
 
-@np.errstate(invalid='ignore') 
-def sync_embeddings(force_rebuild=False):
+def sync_database(force_rebuild=False):
     """
-    Reads all CSVs under papers/ and incrementally updates embeddings.
+    Reads all CSVs under papers/ and builds/updates the parquet database.
     """
-    print("\n--- Step 2: Syncing embeddings ---")
+    print("\n--- Step 2: Syncing database ---")
     
     if force_rebuild:
-        print("Force rebuild mode: Deleting existing database, embeddings, and log files.")
+        print("Force rebuild mode: Deleting existing database and log files.")
         if os.path.exists(DB_FILE): os.remove(DB_FILE)
-        if os.path.exists(EMBEDDING_FILE): os.remove(EMBEDDING_FILE)
         if os.path.exists(LOG_FILE): os.remove(LOG_FILE)
 
     all_csv_files = set(glob.glob(os.path.join(PAPERS_DIR, '**/*.csv'), recursive=True))
@@ -135,16 +130,10 @@ def sync_embeddings(force_rebuild=False):
     new_files = list(all_csv_files - processed_files)
     
     if not new_files:
-        print("No new CSV files found. Embeddings are up to date.")
+        print("No new CSV files found. Database is up to date.")
         return
         
     print(f"Processing {len(new_files)} new CSV files...")
-
-    try:
-        model = SentenceTransformer(MODEL_NAME)
-    except Exception as e:
-        print(f"Error: Failed to load SentenceTransformer model ({MODEL_NAME}). {e}")
-        return
         
     df_list = []
     for f in new_files:
@@ -159,48 +148,33 @@ def sync_embeddings(force_rebuild=False):
 
     new_df = pd.concat(df_list, ignore_index=True)
     new_df['Title'] = new_df['Title'].fillna('')
-    new_df['Author'] = new_df['Author'].fillna('') # [NEW] Handle new Author column
+    new_df['Author'] = new_df['Author'].fillna('')
     new_df['Abstract'] = new_df['Abstract'].fillna('')
     new_df['Keywords'] = new_df['Keywords'].fillna('')
-    new_df['search_text'] = new_df['Title'] + ' ' + new_df['Abstract'] # Author is not included in search embedding
 
-    print(f"Generating embeddings for {len(new_df)} new papers...")
-    new_embeddings = model.encode(
-        new_df['search_text'].tolist(), 
-        show_progress_bar=True, 
-        normalize_embeddings=True
-    )
-
-    if os.path.exists(DB_FILE) and os.path.exists(EMBEDDING_FILE):
-        print("Loading and merging with existing database and embeddings.")
+    if os.path.exists(DB_FILE):
+        print("Loading and merging with existing database.")
         try:
             old_df = pd.read_parquet(DB_FILE)
-            old_embeddings = np.load(EMBEDDING_FILE)
-            
             combined_df = pd.concat([old_df, new_df], ignore_index=True)
-            combined_embeddings = np.vstack([old_embeddings, new_embeddings])
         except Exception as e:
-            print(f"Error: Failed to load existing data. Overwriting with new data. ({e})")
+            print(f"Error: Failed to load existing data. Overwriting. ({e})")
             combined_df = new_df
-            combined_embeddings = new_embeddings
     else:
-        print("Creating new database and embedding files.")
+        print("Creating new database file.")
         combined_df = new_df
-        combined_embeddings = new_embeddings
 
     try:
-        combined_df.drop(columns=['search_text'], inplace=True, errors='ignore')
         combined_df.to_parquet(DB_FILE, index=False)
-        np.save(EMBEDDING_FILE, combined_embeddings)
         
         with open(LOG_FILE, 'a', encoding='utf-8') as f:
             for file_path in new_files:
                 f.write(f"{file_path}\n")
         
-        print(f"\nEmbedding sync complete: Total {len(combined_df)} papers saved.")
+        print(f"\nDatabase sync complete: Total {len(combined_df)} papers saved.")
         
     except Exception as e:
-        print(f"Error: Failed to save final files. {e}")
+        print(f"Error: Failed to save final database. {e}")
 
 # --- 3. Main Execution Logic ---
 
@@ -214,7 +188,7 @@ def main():
     args = parser.parse_args()
 
     sync_csv_files(force_rebuild=args.force)
-    sync_embeddings(force_rebuild=args.force)
+    sync_database(force_rebuild=args.force)
     
     print("\n[Complete] All update processes have finished.")
 
