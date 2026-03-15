@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+sentence-transformers
+altair
+bibtexparser
+pyarrow
