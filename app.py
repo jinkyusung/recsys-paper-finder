@@ -55,13 +55,16 @@ APP_CSS = """
 
     /* External link icon */
     .gs-ext-link {
-        font-size: 0.85rem;
-        color: #1558d6;
-        margin-left: 5px;
+        font-size: 1.05rem; /* Increased size to match title weight */
+        color: #1a73e8; /* Premium Google blue */
+        margin-left: 6px;
         text-decoration: none;
+        display: inline-block;
         vertical-align: middle;
+        line-height: 1;
+        margin-top: -2px; /* Fine-tuned alignment */
     }
-    .gs-ext-link:hover { text-decoration: underline; }
+    .gs-ext-link:hover { color: #1558d6; text-decoration: underline; }
 
     /* Author · Venue · Scores line */
     .gs-meta {
@@ -116,11 +119,18 @@ APP_CSS = """
     }
     
     /* When CLOSED: Show snippet and 'More' arrow */
-    details.gs-toggle:not([open]) .gs-toggle-link::after { content: "Abstract ▾"; }
+    details.gs-toggle:not([open]) .gs-toggle-link::after { 
+        content: "more ▾"; 
+        margin-left: 4px;
+    }
     
-    /* When OPEN: Hide snippet, show 'Close' arrow */
+    /* When OPEN: Hide snippet, show 'Less' arrow */
     details.gs-toggle[open] .gs-snippet-text { display: none; }
-    details.gs-toggle[open] .gs-toggle-link::after { content: "Abstract ▴"; font-weight: 600; }
+    details.gs-toggle[open] .gs-toggle-link::after { 
+        content: "less ▴"; 
+        font-weight: 600;
+        margin-left: 0;
+    }
 
     details.gs-toggle > summary {
         display: block;
@@ -137,6 +147,7 @@ APP_CSS = """
         font-weight: 500;
         margin-top: 2px;
     }
+    .gs-toggle-link:hover { text-decoration: underline; }
 
     .gs-abstract-full {
         margin-top: 6px;
@@ -148,7 +159,7 @@ APP_CSS = """
         border-radius: 8px;
         border: 1px solid #eef2ff;
         border-left: 4px solid #1558d6;
-        cursor: default; /* Detailed text shouldn't look clickable */
+        cursor: default;
     }
 
     /* Keyword highlight (Search results) */
