@@ -4,6 +4,7 @@ import numpy as np
 import os
 import re
 from sentence_transformers import SentenceTransformer, util
+from rank_bm25 import BM25Okapi
 import altair as alt
 
 # --- 상수 정의 ---
@@ -108,7 +109,7 @@ def load_model(model_name):
 
 @st.cache_data
 def load_search_database(_model):
-    default_return = (None, None, 2000, 2025, None) 
+    default_return = (None, None, 2000, 2025, None, None)
     
     if not os.path.exists(DB_FILE) or not os.path.exists(EMBEDDING_FILE):
         st.error(f"Error: Could not find '{DB_FILE}' or '{EMBEDDING_FILE}'.")
@@ -163,14 +164,33 @@ def load_search_database(_model):
         
         df['is_recsys'] = is_recsys_semantic | is_recsys_keyword
 
-        # [수정] st.success를 사용하여 완료 메시지 표시
+        # BM25 인덱스 빌드 (토큰화: 공백 기준 split)
+        tokenized_corpus = [doc.split() for doc in df['search_corpus_lower']]
+        bm25 = BM25Okapi(tokenized_corpus)
+
         st.success(f"Successfully loaded {len(df)} papers and their embeddings.")
-        return df, embeddings, min_year, max_year, summary_df 
+        return df, embeddings, min_year, max_year, summary_df, bm25
         
     except Exception as e:
         st.error(f"Error: Failed to load database files. {e}")
         st.info("Please try rebuilding with 'python update.py --force'.")
         return default_return
+
+
+def bm25_search(bm25, df, query_str, top_k=None):
+    """BM25 점수로 df 내 문서를 랭킹하여 반환. df는 원본 인덱스 유지 subset이어도 동작."""
+    tokens = query_str.lower().split()
+    if not tokens:
+        return df
+    # df의 각 행에 대해 BM25 점수를 계산 (원본 인덱스 기준)
+    scores = bm25.get_scores(tokens)  # 전체 corpus 크기와 동일한 배열
+    subset_scores = scores[df.index]  # df에 해당하는 행만 추출
+    result_df = df.copy()
+    result_df['BM25_Score'] = subset_scores
+    result_df = result_df.sort_values(by='BM25_Score', ascending=False)
+    if top_k is not None:
+        result_df = result_df.head(top_k)
+    return result_df
 
 def filter_by_keywords(df, query, mode='AND'):
     terms = query.lower().split()
@@ -232,6 +252,8 @@ def display_paper(row, highlight_query_str, index):
         score_parts = []
         if 'Similarity' in row and pd.notna(row['Similarity']):
             score_parts.append(f"Semantic Relevance: <strong>{row['Similarity']:.4f}</strong>")
+        if 'BM25_Score' in row and pd.notna(row['BM25_Score']):
+            score_parts.append(f"BM25 Score: <strong>{row['BM25_Score']:.3f}</strong>")
         if 'recsys_score' in row and pd.notna(row['recsys_score']):
             score_parts.append(f"RecSys Relevance: <strong>{row['recsys_score']:.3f}</strong>")
         has_recommend = row.get('has_recommend_keyword', False)
@@ -290,10 +312,9 @@ def main():
     model = load_model(MODEL_NAME) 
     
     if model:
-        # load_search_database 함수가 st.text() 및 st.success()를 직접 호출
-        papers_df, paper_embeddings, min_year, max_year, summary_df = load_search_database(model)
+        papers_df, paper_embeddings, min_year, max_year, summary_df, bm25 = load_search_database(model)
     else:
-        papers_df, paper_embeddings, min_year, max_year, summary_df = (None, None, 2000, 2025, None)
+        papers_df, paper_embeddings, min_year, max_year, summary_df, bm25 = (None, None, 2000, 2025, None, None)
 
     if papers_df is None or paper_embeddings is None:
         st.warning("Failed to load essential data. The app cannot start.")
@@ -414,10 +435,14 @@ def main():
             highlight_query_str = query 
             
         else: # search_type == 'exact'
-            # 4. Exact: 필터링된 결과 전체를 사용하고, 상위 K개만 표시
-            results_df = filtered_df.head(top_k) 
-            
-            highlight_query_str = must_include_query + " " + any_include_query 
+            # 4. Exact: AND/OR 필터 후 BM25로 랭킹
+            bm25_query = (must_include_query + " " + any_include_query).strip()
+            if bm25_query and bm25 is not None and not filtered_df.empty:
+                results_df = bm25_search(bm25, filtered_df, bm25_query, top_k=top_k)
+            else:
+                results_df = filtered_df.head(top_k)
+
+            highlight_query_str = bm25_query
 
         # --- 결과 표시 ---
             

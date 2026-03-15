@@ -5,3 +5,4 @@ sentence-transformers
 altair
 bibtexparser
 pyarrow
+rank_bm25
