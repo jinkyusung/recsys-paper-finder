@@ -612,7 +612,7 @@ def main():
     if search_type == 'bm25':
         bm25_query = st.text_input(
             label="What are you looking for?",
-            placeholder="e.g., cross-domain recommendation, reinforcement learning",
+            placeholder="e.g., Graph Neural Networks, Diffusion",
             help="Results are ranked by semantic relevance. Use commas to separate multiple terms."
         )
         author_query = ""
