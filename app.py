@@ -208,6 +208,13 @@ APP_CSS = """
         padding: 0 2px;
         border-radius: 2px;
     }
+    .recsys-mark {
+        color: #1967d2;
+        background-color: #e8f0fe;
+        font-weight: 600;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
     /* Responsive Flex Grid */
     [data-testid="stHorizontalBlock"] {
         flex-wrap: wrap !important;
