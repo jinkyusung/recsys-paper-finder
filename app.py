@@ -10,19 +10,7 @@ import altair as alt
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
 RECSYS_KEYWORDS_RAW      = ['recommend', 'collaborative filtering', 'cf', 'matrix factorization']
-RECSYS_MASTER_REGEX      = re.compile('|'.join(RECSYS_KEYWORDS_RAW), re.IGNORECASE)
-RECOMMEND_ONLY_REGEX     = re.compile(r'recommend', re.IGNORECASE)
-
-# --- Palette: Synchronized with Graph ---
-CONF_COLORS = {
-    'CIKM': '#8c564b', # Brown
-    'KDD': '#2ca02c',  # Green
-    'SIGIR': '#ff7f0e', # Orange
-    'WSDM': '#9467bd', # Purple
-    'WWW': '#d62728',  # Red
-    'RecSys': '#1f77b4' # Blue
-}
-DEFAULT_COLOR = '#7f7f7f' # Grey for others
+RECSYS_MASTER_REGEX      = re.compile('|'.join(rf'\b{re.escape(t)}\b' if len(t) < 4 else re.escape(t) for t in RECSYS_KEYWORDS_RAW), re.IGNORECASE)
 
 APP_CSS = """
 <style>
