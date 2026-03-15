@@ -322,9 +322,21 @@ def generate_keyword_pills(keywords_str):
     if not keywords_str or pd.isna(keywords_str):
         return ''
     spans = []
+    # Common suffixes that indicate a hyphen might be a broken word (e.g., learn-ing)
+    suffix_pattern = re.compile(r'(\w+)-(ing|ed|ion|er|ation|ive|ment|all?y|able|ness|s|es)\b', re.IGNORECASE)
+    
     for k in re.split(r'[;,]', keywords_str):
-        key = re.sub(r'[^a-zA-Z0-9\s]', '', k).strip()
+        # 1. LaTeX cleanup
+        k = clean_latex(k)
+        # 2. Whitelist: allow alphanumeric, space, and hyphen
+        key = re.sub(r'[^a-zA-Z0-9\s\-]', '', k).strip()
+        # 3. Fix broken words (e.g., learn-ing -> learning)
+        key = suffix_pattern.sub(r'\1\2', key)
+        # 4. Final trim
+        key = key.strip('-').strip()
+        
         if key:
+            # key.title() will capitalize both parts of hyphenated words: Graph-Based
             spans.append(f'<span class="keyword-pill">{key.title()}</span>')
     return ' '.join(spans)
 
