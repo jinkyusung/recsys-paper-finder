@@ -593,7 +593,6 @@ def main():
             )
             st.altair_chart(base.mark_line() + base.mark_point(size=100, filled=True),
                             width='stretch')
-            st.caption("Ver. 2.7 Stable Interface | Data distribution across top RecSys venues.")
 
     # --- 2. Advanced Search Stage ---
     st.markdown('<div class="section-label">Define Search Strategy</div>', unsafe_allow_html=True)
