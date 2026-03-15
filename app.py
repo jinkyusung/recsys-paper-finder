@@ -107,38 +107,39 @@ APP_CSS = """
     }
     .gs-snippet-text {
         display: -webkit-box;
-        -webkit-line-clamp: 2; /* Show only 2 lines */
+        -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
         text-overflow: ellipsis;
-        display: inline; /* Keep inline with toggle */
+        color: #444;
+        margin-top: 4px;
+        cursor: pointer;
     }
     
-    details.gs-toggle { display: inline; }
+    /* Hide snippet preview when details is open */
+    details.gs-toggle[open] .gs-snippet-text {
+        display: none;
+    }
+
     details.gs-toggle > summary {
-        display: inline-block;
-        cursor: pointer;
-        color: #1558d6;
-        font-size: 0.85rem;
-        font-weight: 500;
+        display: block; /* Make summary a block to contain the snippet */
+        outline: none;
         list-style: none;
         user-select: none;
-        margin-left: 4px;
     }
-    details.gs-toggle > summary:hover { text-decoration: underline; }
-    details.gs-toggle > summary::after { content: " ▾"; }
-    details.gs-toggle[open] > summary { display: none; } /* Hide the 'More' link when open */
-
+    details.gs-toggle > summary::-webkit-details-marker { display: none; }
+    
     .gs-abstract-full {
-        margin-top: 8px;
+        margin-top: 10px;
         font-size: 0.90rem;
         line-height: 1.65;
-        color: #3c4043;
-        padding: 10px 14px;
-        background: #f8f9fa;
+        color: #333;
+        padding: 12px 16px;
+        background: #fdfdfd;
         border-radius: 8px;
-        border-left: 3px solid #1558d6;
-        display: block;
+        border: 1px solid #eef2ff;
+        border-left: 4px solid #1558d6;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
 
     /* Keyword highlight (Search results) */
@@ -397,16 +398,19 @@ def display_paper(row, highlight_query_str, index):
 
     # Abstract Snippet logic
     raw_abstract = row.get('Abstract', '')
-    cleaned_abs  = clean_latex(raw_abstract)
-    rendered_abs = _render_abstract(raw_abstract, highlight_query_str) # This handles highlight + latex clean
+    rendered_abs = _render_abstract(raw_abstract, highlight_query_str)
     
-    # We show it as a snippet + a hidden full version
     snippet_html = f'''
     <div class="gs-snippet-container">
-        <span class="gs-snippet-text">{rendered_abs}</span>
         <details class="gs-toggle">
-            <summary>Abstract</summary>
-            <div class="gs-abstract-full">{rendered_abs}</div>
+            <summary>
+                <div class="gs-snippet-text">{rendered_abs}</div>
+                <div style="color: #1558d6; font-size: 0.82rem; font-weight: 500; margin-top: 2px;">Abstract ▾</div>
+            </summary>
+            <div class="gs-abstract-full">
+                <div style="color: #1558d6; font-weight: 600; font-size: 0.85rem; margin-bottom: 8px; cursor: pointer;">Abstract ▴</div>
+                {rendered_abs}
+            </div>
         </details>
     </div>
     '''
