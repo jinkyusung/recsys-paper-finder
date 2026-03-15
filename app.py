@@ -13,10 +13,25 @@ RECSYS_KEYWORDS_RAW      = ['recommend', 'collaborative filtering', 'cf', 'matri
 RECSYS_MASTER_REGEX      = re.compile('|'.join(RECSYS_KEYWORDS_RAW), re.IGNORECASE)
 RECOMMEND_ONLY_REGEX     = re.compile(r'recommend', re.IGNORECASE)
 
+# --- Palette: Synchronized with Graph ---
+CONF_COLORS = {
+    'CIKM': '#8c564b', # Brown
+    'KDD': '#2ca02c',  # Green
+    'SIGIR': '#ff7f0e', # Orange
+    'WSDM': '#9467bd', # Purple
+    'WWW': '#d62728',  # Red
+    'RecSys': '#1f77b4' # Blue
+}
+DEFAULT_COLOR = '#7f7f7f' # Grey for others
+
 APP_CSS = """
 <style>
-    /* Layout */
-    .main > div { max-width: 960px; margin: 0 auto; }
+    /* Layout - Optimized for central column (Google-style focus) */
+    [data-testid="stAppViewBlockContainer"] {
+        max-width: 720px !important;
+        padding-top: 3rem !important;
+        margin: auto;
+    }
 
     /* Paper entry — Google Scholar style, no box */
     .gs-paper {
@@ -85,15 +100,15 @@ APP_CSS = """
         font-size: 0.68rem;
         font-weight: 700;
         text-transform: uppercase;
-        margin-left: 6px;
+        margin-right: 6px; /* Changed from left to right for row-start placement */
         vertical-align: middle;
         line-height: 1.6;
         letter-spacing: 0.03em;
     }
     .badge-bm25 {
-        background-color: #f1f3f4;
-        color: #5f6368;
-        border: 1px solid #dadce0;
+        background-color: #FFF3CD; /* Yellow for search match alignment */
+        color: #856404;
+        border: 1px solid #ffeeba;
     }
     .badge-rs {
         background-color: #e8f0fe;
@@ -101,22 +116,31 @@ APP_CSS = """
         border: 1px solid #c5d2f6;
     }
 
-    /* Keyword pills */
+    /* Keyword pills - Unified with score badges */
     .keyword-pill {
         display: inline-block;
-        vertical-align: middle; /* Fix: Match toggle alignment */
+        vertical-align: middle;
         background-color: #f1f3f4;
-        color: #3c4043;
-        padding: 2px 9px;
-        margin: 2px 0; /* Simpler margin */
-        border-radius: 10px;
-        font-size: 0.76rem;
-        font-weight: 500;
+        color: #5f6368;
+        padding: 0px 6px;
+        margin: 2px 0;
+        border-radius: 4px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
         border: 1px solid #dadce0;
+        line-height: 1.6;
+        letter-spacing: 0.02em;
     }
-
-    /* Abstract & Actions Layout */
-    .gs-paper-toggle { border: none; }
+    /* Unified Abstract Zone */
+    .gs-abstract-zone {
+        margin-top: 4px;
+        background: #f9f9f9;
+        border-radius: 6px;
+        border: 1px solid #eee; /* Uniform subtle border */
+        box-shadow: none;
+    }
+    
     .gs-paper-toggle > summary {
         display: block;
         outline: none;
@@ -126,53 +150,55 @@ APP_CSS = """
     }
     .gs-paper-toggle > summary::-webkit-details-marker { display: none; }
 
-    /* 2-line Preview snippet */
+    /* Content inside the zone */
+    .gs-abstract-content {
+        padding: 6px 10px; /* Reduced padding */
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: #5f6368;
+    }
+
+    /* 2-line Preview (only visible when closed) */
     .gs-snippet-preview {
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
         text-overflow: ellipsis;
-        color: #5f6368;
-        font-size: 0.88rem;
-        line-height: 1.55;
-        margin-top: 4px;
-        margin-bottom: 4px;
     }
     .gs-paper-toggle[open] .gs-snippet-preview { display: none; }
 
-    /* Fixed Actions Row (more/less + keywords) */
+    /* Full Text (only visible when open) */
+    .gs-full-content { 
+        display: none; 
+    }
+    .gs-paper-toggle[open] .gs-full-content { 
+        display: block;
+    }
+
+    /* Fixed Actions Row stays outside */
     .gs-actions-row {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 6px;
-        margin-top: 2px;
+        margin-top: 8px;
+        margin-bottom: 4px;
     }
+    
+    /* Toggle button next to Venue */
     .gs-toggle-btn {
         color: #1558d6;
         font-size: 0.82rem;
         font-weight: 500;
-        min-width: 50px;
         cursor: pointer;
+        display: inline-block;
+        vertical-align: middle;
     }
     .gs-toggle-btn:hover { text-decoration: underline; }
 
     .gs-paper-toggle:not([open]) .gs-toggle-btn::after { content: "more ▾"; }
     .gs-paper-toggle[open] .gs-toggle-btn::after { content: "less ▴"; font-weight: 600; }
-
-    /* Full abstract box */
-    .gs-abstract-full-box {
-        margin-top: 10px;
-        font-size: 0.88rem;
-        line-height: 1.6;
-        color: #5f6368;
-        padding: 14px 18px;
-        background: #fdfdfd;
-        border-radius: 8px;
-        border: 1px solid #eef2ff;
-        border-left: 4px solid #1558d6;
-    }
 
     /* Keyword highlight (Search results) */
     mark {
@@ -182,13 +208,65 @@ APP_CSS = """
         padding: 0 2px;
         border-radius: 2px;
     }
-    /* RecSys keyword highlight (Blue) */
-    .recsys-mark {
-        background-color: #D1E8FF;
-        color: #004085;
-        font-weight: 600;
-        padding: 0 2px;
-        border-radius: 2px;
+    /* Responsive Flex Grid */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+    [data-testid="stHorizontalBlock"] > div {
+        min-width: 130px !important; /* Forces one per row if width < 130px */
+        flex-basis: 130px !important;
+    }
+    /* Specific narrow columns like 'Limit' */
+    div[data-testid="column"]:has(input[type="number"]) {
+        min-width: 80px !important;
+        flex-basis: 80px !important;
+    }
+
+    .section-label {
+        font-size: 1.1rem; /* Significantly larger */
+        font-weight: 700;
+        color: #202124; /* Darker for better contrast */
+        margin-top: 32px; /* More breathing room */
+        margin-bottom: 12px;
+        letter-spacing: -0.01em;
+    }
+    .gs-filter-section {
+        background-color: #fcfcfc;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #f0f0f0;
+        margin-top: 10px;
+    }
+    
+    /* Bigger labels for Streamlit widgets */
+    .stSlider label, .stSelectbox label, .stMultiSelect label, .stTextInput label, .stNumberInput label {
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        color: #3c4043 !important;
+        margin-bottom: 8px !important;
+    }
+    .stat-item {
+        font-size: 0.85rem;
+        color: #5f6368;
+        padding: 4px 0;
+        border-bottom: 1px solid #f1f3f4;
+    }
+    .stat-value {
+        font-weight: 700;
+        color: #1a73e8;
+        float: right;
+    }
+
+    /* Extremely tight checkbox */
+    [data-testid="stCheckbox"] {
+        margin-bottom: -22px !important;
+        padding-top: 0px !important;
+        padding-bottom: 0px !important;
+    }
+    [data-testid="stCheckbox"] label p {
+        font-size: 0.78rem !important;
+        margin: 0 !important;
     }
 </style>
 """
@@ -233,7 +311,7 @@ def load_search_database():
             except Exception as e:
                 print(f"Warning: summary table failed. {e}")
 
-        # Search corpus: Title + Abstract + Keywords (no references)
+        # Search corpus: Title + Abstract + Keywords
         df['search_corpus_lower'] = (
             df['Title'].str.lower() + ' ' +
             df['Abstract'].str.lower() + ' ' +
@@ -261,7 +339,6 @@ def load_search_database():
         # BM25 index
         bm25 = BM25Okapi([doc.split() for doc in df['search_corpus_lower']])
 
-        st.success(f"Loaded {len(df)} papers.")
         return df, min_year, max_year, summary_df, bm25
 
     except Exception as e:
@@ -275,14 +352,21 @@ def load_search_database():
 # ---------------------------------------------------------------------------
 
 def bm25_search(bm25, df, query_str, top_k=None):
-    """Rank subset df by BM25 score for query_str."""
-    tokens = query_str.lower().split()
+    """Rank subset df by BM25 score for query_str, only returning matches."""
+    tokens = [t for t in query_str.lower().split() if t]
     if not tokens:
         return df
-    scores = bm25.get_scores(tokens)[df.index]
+    
+    # Get scores and filter out non-matches (0.0)
+    all_scores = bm25.get_scores(tokens)
+    scores = all_scores[df.index]
+    
     result = df.copy()
     result['BM25_Score'] = scores
+    # Filter for score > 0 to remove irrelevant fallback results
+    result = result[result['BM25_Score'] > 0]
     result = result.sort_values('BM25_Score', ascending=False)
+    
     return result.head(top_k) if top_k else result
 
 
@@ -348,6 +432,7 @@ def generate_keyword_pills(keywords_str):
     # Common suffixes that indicate a hyphen might be a broken word (e.g., learn-ing)
     suffix_pattern = re.compile(r'(\w+)-(ing|ed|ion|er|ation|ive|ment|all?y|able|ness|s|es)\b', re.IGNORECASE)
     
+    keys = []
     for k in re.split(r'[;,]', keywords_str):
         # 1. LaTeX cleanup
         k = clean_latex(k)
@@ -359,8 +444,13 @@ def generate_keyword_pills(keywords_str):
         key = key.strip('-').strip()
         
         if key:
-            # key.title() will capitalize both parts of hyphenated words: Graph-Based
-            spans.append(f'<span class="keyword-pill">{key.title()}</span>')
+            keys.append(key.title())
+    
+    # Sort alphabetically
+    keys.sort()
+    
+    for key in keys:
+        spans.append(f'<span class="keyword-pill">{key}</span>')
     return ' '.join(spans)
 
 
@@ -429,7 +519,11 @@ def display_paper(row, highlight_query_str, index):
     author_display = _first_author(author_str)
     if author_display:
         meta_parts.append(f'<span class="gs-authors">{author_display}</span>')
-    meta_parts.append(f'<span class="gs-venue">{conf} ({year})</span>')
+    
+    # [NEW] Meta includes Venue(Year) + more/less toggle
+    venue_html = f'<span class="gs-venue">{conf} ({year})</span>'
+    toggle_html = '<span class="gs-toggle-btn"></span>'
+    meta_parts.append(f'{venue_html} <span class="gs-dot">·</span> {toggle_html}')
 
     badge_html = ""
     if 'BM25_Score' in row and pd.notna(row['BM25_Score']):
@@ -437,37 +531,42 @@ def display_paper(row, highlight_query_str, index):
     if 'recsys_match_count' in row and pd.notna(row['recsys_match_count']):
         badge_html += f'<span class="score-badge badge-rs">RS Match {int(row["recsys_match_count"])}</span>'
 
-    meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + badge_html + '</div>'
+    # Meta line now ONLY bibliographic info + toggle
+    meta_line = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
-    # Combined Action Row logic
+    # Combined Action Row logic: Badges (Left) + Keywords (Right)
     pills_html = generate_keyword_pills(keywords_str)
     
-    # Abstract versions: plain for preview, highlighted for full view
+    # Abstract versions
     raw_abstract    = row.get('Abstract', '')
     plain_abs       = clean_latex(raw_abstract)
     highlighted_abs = _render_abstract(raw_abstract, highlight_query_str)
 
-    # Simplified HTML: Actions row stays in summary (always visible)
-    # The full content box appears below it when open.
-    abstract_section = f'''
-    <details class="gs-paper-toggle">
-        <summary>
-            <div class="gs-snippet-preview">{plain_abs}</div>
-            <div class="gs-actions-row">
-                <span class="gs-toggle-btn"></span>
-                {pills_html}
-            </div>
-        </summary>
-        <div class="gs-abstract-full-box">{highlighted_abs}</div>
-    </details>
-    '''
-
-    return (
+    # Professional HTML Assembly
+    html = (
         f'<div class="gs-paper">'
         f'  <div class="gs-index-col">{index}</div>'
-        f'  <div class="gs-content-col">{title_html}{meta_html}{abstract_section}</div>'
+        f'  <div class="gs-content-col">'
+        f'    <div class="gs-title">{title}{ext_link}</div>'
+        f'    <details class="gs-paper-toggle">'
+        f'        <summary>'
+        f'            {meta_line}'
+        f'            <div class="gs-abstract-zone">'
+        f'                <div class="gs-abstract-content">'
+        f'                    <div class="gs-snippet-preview">{plain_abs}</div>'
+        f'                    <div class="gs-full-content">{highlighted_abs}</div>'
+        f'                </div>'
+        f'            </div>'
+        f'        </summary>'
+        f'    </details>'
+        f'    <div class="gs-actions-row">'
+        f'        {badge_html}'
+        f'        {pills_html}'
+        f'    </div>'
+        f'  </div>'
         f'</div>'
     )
+    return html.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +574,7 @@ def display_paper(row, highlight_query_str, index):
 # ---------------------------------------------------------------------------
 
 def main():
-    st.set_page_config(layout="wide", page_title="RecSys Paper Finder", page_icon="🔎")
+    st.set_page_config(layout="centered", page_title="RecSys Paper Finder")
     st.title("RecSys Paper Finder")
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
@@ -485,11 +584,11 @@ def main():
         st.warning("Failed to load essential data. The app cannot start.")
         return
 
-    # Database summary chart
+    # --- 1. Intelligent Dashboard Row ---
     if summary_df is not None and not summary_df.empty:
-        with st.expander("View Database Summary", expanded=False):
-            st.markdown("#### Paper Counts by Conference and Year")
-            base  = alt.Chart(summary_df).encode(
+        # Detailed Stats in Toggle
+        with st.expander("Show Detailed Database Analytics", expanded=False):
+            base = alt.Chart(summary_df).encode(
                 x=alt.X('Year', axis=alt.Axis(format='d')),
                 y='Paper Count',
                 color='Conference',
@@ -497,51 +596,75 @@ def main():
             )
             st.altair_chart(base.mark_line() + base.mark_point(size=100, filled=True),
                             width='stretch')
+            st.caption("Ver. 2.7 Stable Interface | Data distribution across top RecSys venues.")
 
-    # Search mode
+    # --- 2. Advanced Search Stage ---
+    st.markdown('<div class="section-label">Define Search Strategy</div>', unsafe_allow_html=True)
+    
     search_type = st.radio(
-        "Search Mode:",
-        ('bm25', 'exact'),
-        format_func=lambda x: {'bm25': '🔍 BM25 (Ranked by Relevance)', 'exact': '🔎 Exact (Keyword Filter Only)'}[x],
+        "Select your primary search intent:",
+        ('bm25', 'exact', 'author'),
+        format_func=lambda x: {
+            'bm25': 'Semantic Discovery (BM25)', 
+            'exact': 'Specific Keywords (Exact)',
+            'author': 'Researcher Search (Author)'
+        }[x],
         horizontal=True
     )
 
-    bm25_query = st.text_input(
-        "BM25 Search Query:",
-        placeholder="e.g., graph neural network collaborative filtering",
-        disabled=(search_type == 'exact'),
-        help="Ranks results by BM25 relevance across Title, Abstract, and Keywords."
+    # Only show primary query what is needed
+    if search_type == 'bm25':
+        bm25_query = st.text_input(
+            label="What are you looking for?",
+            placeholder="e.g., cross-domain recommendation reinforcement learning",
+            help="Results are ranked by semantic relevance to your natural language query."
+        )
+        author_query = ""
+    elif search_type == 'author':
+        author_query = st.text_input(
+            label="Enter Author Name",
+            placeholder="e.g., Steffen Rendle",
+            help="Find specific researchers in the RecSys community."
+        )
+        bm25_query = ""
+    else: # exact mode
+        bm25_query = ""
+        author_query = ""
+
+    # Integrated Keyword Constraints (AND/OR) inside the Define block
+    must_include_query = st.text_input("Must Contain (AND)", placeholder="Required terms", help="Papers MUST contain all these words.")
+    any_include_query = st.text_input("Include Any (OR)", placeholder="Optional terms", help="Papers with ANY of these words will be included.")
+
+    # --- 3. Refinement Stage ---
+    st.markdown('<div class="section-label">Refine Results</div>', unsafe_allow_html=True)
+    
+    all_confs = sorted(papers_df['Conference Name (Book Title)'].unique().tolist())
+    selected_confs = st.multiselect(
+        "Target Venues", 
+        options=all_confs,
+        default=all_confs,
+        help="Select specific conferences to include in your search."
     )
+    
+    # Bottom refinement set
+    top_k = st.number_input("Max Results", min_value=1, max_value=5000, value=100, step=10)
+    selected_year_range = st.slider("Publication Year Range", min_value=min_year, max_value=max_year, value=(min_year, max_year))
 
-    col_must, col_any = st.columns(2)
-    with col_must:
-        must_include_query = st.text_input(
-            "Must-include keywords (AND)",
-            placeholder="e.g., graph cf",
-            help="Results MUST contain ALL of these terms in Title / Abstract / Keywords."
-        )
-    with col_any:
-        any_include_query = st.text_input(
-            "Include-at-least-one (OR)",
-            placeholder="e.g., privacy fairness",
-            help="Results MUST contain AT LEAST ONE of these terms in Title / Abstract / Keywords."
-        )
-
-    col_year, col_topk = st.columns(2)
-    with col_year:
-        if min_year < max_year:
-            selected_year_range = st.slider("Filter by Year Range:", min_value=min_year, max_value=max_year, value=(min_year, max_year))
-        else:
-            st.info(f"Data for year {min_year} only.")
-            selected_year_range = (min_year, max_year)
-    with col_topk:
-        top_k = st.number_input("Max Results to Display", min_value=1, max_value=5000, value=50, step=10)
-
-    if st.button("Search"):
+    st.markdown('<div style="margin-top: 24px;"></div>', unsafe_allow_html=True)
+    if st.button("Find Papers", use_container_width=True, type="primary"):
         highlight_query_str = ""
 
-        # Step 1: Year filter
+        # Step 1: Year & Conference filters
         filtered_df = papers_df
+        
+        # Conference filter
+        if selected_confs:
+            filtered_df = filtered_df[filtered_df['Conference Name (Book Title)'].isin(selected_confs)]
+        else:
+            st.warning("Please select at least one conference.")
+            st.stop()
+            
+        # Year filter
         if min_year < max_year:
             s, e = selected_year_range
             filtered_df = filtered_df[(filtered_df['Year_Num'] >= s) & (filtered_df['Year_Num'] <= e)]
@@ -551,17 +674,32 @@ def main():
             filtered_df = filter_by_keywords(filtered_df, must_include_query, mode='AND')
         if any_include_query:
             filtered_df = filter_by_keywords(filtered_df, any_include_query, mode='OR')
-
-        # Step 3: Rank by mode
+        
+        # Step 2.1: Author filter
+        if author_query:
+            terms = [t.strip().lower() for t in author_query.split() if t.strip()]
+        # Step 3: Handle Search Modes
         if search_type == 'bm25':
             if not bm25_query:
-                st.warning("Please enter a BM25 query to search.")
+                st.warning("Please enter a BM25 query.")
                 st.stop()
             results_df = bm25_search(bm25, filtered_df, bm25_query, top_k=top_k) if not filtered_df.empty else filtered_df
             highlight_query_str = bm25_query
-        else:
+            
+        elif search_type == 'author':
+            if not author_query:
+                st.warning("Please enter an author name.")
+                st.stop()
+            terms = [t.strip().lower() for t in author_query.split() if t.strip()]
+            mask = pd.Series(True, index=filtered_df.index)
+            for t in terms:
+                mask &= filtered_df['Author'].str.lower().str.contains(t, na=False)
+            results_df = filtered_df[mask].head(top_k)
+            highlight_query_str = author_query
+            
+        else: # exact mode
             if not must_include_query and not any_include_query:
-                st.warning("Exact mode requires at least one keyword filter (AND or OR).")
+                st.warning("Exact mode requires at least one keyword filter.")
                 st.stop()
             results_df = filtered_df.head(top_k)
             highlight_query_str = (must_include_query + ' ' + any_include_query).strip()
@@ -576,8 +714,8 @@ def main():
 
             st.subheader(f"Search Results ({len(results_df)} total)")
             tab1, tab2, tab3 = st.tabs([
-                f"RS Papers ({len(recsys_df)})",
-                f"Potential RS? ({len(ambiguous_df)})",
+                f"RecSys Papers ({len(recsys_df)})",
+                f"Potential RecSys ({len(ambiguous_df)})",
                 f"Other Papers ({len(other_df)})"
             ])
             with tab1:
