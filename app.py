@@ -92,25 +92,45 @@ KEYWORD_CSS = """
         border: 1px solid #dadce0;
     }
 
-    /* Abstract expander – minimal Google Scholar style */
-    div[data-testid="stExpander"] {
-        border: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
+    /* Abstract toggle: native <details> inline with keywords */
+    .gs-bottom-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        margin: 4px 0 2px;
     }
-    div[data-testid="stExpander"] summary {
-        padding: 2px 0 !important;
+    details.gs-toggle {
+        display: inline-block;
+        vertical-align: middle;
+        margin: 2px 0 4px 0;
     }
-    div[data-testid="stExpander"] summary p {
-        font-size: 0.82rem !important;
-        font-weight: 400 !important;
-        color: #1558d6 !important;
+    details.gs-toggle > summary {
+        display: inline-block;
+        cursor: pointer;
+        color: #1558d6;
+        font-size: 0.78rem;
+        font-weight: 500;
+        padding: 2px 9px;
+        border-radius: 10px;
+        border: 1px solid #c5d2f6;
+        background: #f0f4ff;
+        list-style: none;
+        user-select: none;
     }
-    div[data-testid="stExpander"] summary:hover p {
-        text-decoration: underline;
+    details.gs-toggle > summary::-webkit-details-marker { display: none; }
+    details.gs-toggle > summary::after { content: " ▾"; font-size: 0.70rem; }
+    details.gs-toggle[open] > summary::after { content: " ▴"; font-size: 0.70rem; }
+    details.gs-toggle > summary:hover { background: #dce6ff; }
+    .gs-abstract-body {
+        margin-top: 8px;
+        font-size: 0.90rem;
+        line-height: 1.65;
+        color: #3c4043;
+        padding: 8px 4px 4px 4px;
     }
 
-    /* Abstract text */
+    /* Abstract text (legacy, keep for safety) */
     .abstract-text {
         font-size: 0.90rem;
         line-height: 1.65;
@@ -326,24 +346,24 @@ def display_paper(row, highlight_query_str, index):
 
     meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
-    # ── 키워드 필 ──
+    # ── 키워드 필 + Abstract 토글 (inline) ──
     pills_html = generate_keyword_pills(keywords_str)
-    pills_block = f'<div style="margin: 4px 0 2px;">{pills_html}</div>' if pills_html else ''
+    abstract_text = row.get('Abstract', '')
+    rendered_abstract = _render_abstract(abstract_text, highlight_query_str)
+    abstract_toggle = (
+        f'<details class="gs-toggle">'
+        f'<summary>Abstract</summary>'
+        f'<div class="gs-abstract-body">{rendered_abstract}</div>'
+        f'</details>'
+    )
+    bottom_row = f'<div class="gs-bottom-row">{pills_html}{abstract_toggle}</div>'
 
-    # ── 완성 HTML 출력 (제목 + 메타+점수 + 키워드) ──
+    # ── 단일 HTML 블록으로 전체 출력 ──
     st.markdown(
-        f'<div class="gs-paper">{title_html}{meta_html}{pills_block}</div>',
+        f'<div class="gs-paper">{title_html}{meta_html}{bottom_row}</div>'
+        f'<hr class="gs-separator">',
         unsafe_allow_html=True
     )
-
-    # ── Abstract 토글 (키워드 다음, 구분선 전) ──
-    with st.expander("Abstract"):
-        abstract_text = row.get('Abstract', '')
-        rendered = _render_abstract(abstract_text, highlight_query_str)
-        st.markdown(f'<div class="abstract-text">{rendered}</div>', unsafe_allow_html=True)
-
-    # ── 구분선 (Abstract 토글 이후) ──
-    st.markdown('<hr class="gs-separator">', unsafe_allow_html=True)
 
 
 def main():
