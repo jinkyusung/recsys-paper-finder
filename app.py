@@ -24,48 +24,48 @@ RECOMMEND_ONLY_REGEX = re.compile(r'recommend', re.IGNORECASE)
 
 KEYWORD_CSS = """
 <style>
+    /* Content area max-width: half of 1920px (16:9 full screen) */
+    .main > div {
+        max-width: 960px;
+        margin: 0 auto;
+    }
     /* Paper Title */
     .paper-title {
-        font-size: 1.25rem;
+        font-size: 1.05rem;
         font-weight: 600;
-        color: #1F77B4;
-        text-decoration: none;
+        color: #1a1a1a;
         display: block;
-        margin-bottom: 6px;
-        line-height: 1.3;
-    }
-    .paper-title:hover {
-        text-decoration: underline;
-        color: #0d47a1;
+        margin-bottom: 4px;
+        line-height: 1.35;
     }
     /* Authors */
     .paper-authors {
-        font-size: 0.95rem;
+        font-size: 0.88rem;
         color: #2E7D32;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
         line-height: 1.4;
     }
     /* Meta info like conference and year */
     .paper-meta {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #555555;
-        margin-bottom: 6px;
+        margin-bottom: 5px;
     }
     /* Scores */
     .paper-scores {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: #777777;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
     /* Keyword Pills */
     .keyword-pill {
         display: inline-block; 
         background-color: #F0F2F6; 
         color: #31333F;
-        padding: 4px 10px; 
-        margin: 2px 6px 6px 0; 
+        padding: 3px 9px; 
+        margin: 2px 5px 5px 0; 
         border-radius: 12px;
-        font-size: 0.8rem; 
+        font-size: 0.78rem; 
         font-weight: 500;
         border: 1px solid #E0E0E0;
     }
@@ -75,13 +75,13 @@ KEYWORD_CSS = """
         border-radius: 8px;
     }
     div[data-testid="stExpander"] summary p {
-        font-size: 1rem !important;
+        font-size: 0.95rem !important;
         font-weight: 600;
         color: #444444;
     }
     /* Abstract Text */
     .abstract-text {
-        font-size: 0.95rem;
+        font-size: 0.92rem;
         line-height: 1.6;
         color: #333333;
         text-align: justify;
@@ -202,9 +202,12 @@ def generate_keyword_pills(keywords_str):
     html_spans = []
     keys = re.split(r'[;,]', keywords_str)
     for k in keys:
-        key = k.strip()
+        # 알파벳/숫자/공백 외의 문자 제거
+        key = re.sub(r'[^a-zA-Z0-9\s]', '', k)
+        key = key.strip()
         if key:
-            key = key[0].upper() + key[1:]
+            # 단어별 첫 글자 대문자화 (title casing)
+            key = key.title()
             html_spans.append(f'<span class="keyword-pill">{key}</span>')
     return ' '.join(html_spans)
 
@@ -219,13 +222,13 @@ def display_paper(row, highlight_query_str, index):
         author_str = row.get('Author', '')
         keywords_str = row.get('Keywords', '')
 
-        # HTML generation for Header
-        title_html = f'<a href="{url}" target="_blank" class="paper-title">{index}. {title}</a>' if pd.notna(url) and url else f'<span class="paper-title">{index}. {title}</span>'
-        
+        # 제목은 일반 텍스트 (링크 없음, 크기 다운)
+        title_html = f'<span class="paper-title">{index}. {title}</span>'
+
         author_html = f'<div class="paper-authors">{author_str}</div>' if pd.notna(author_str) and author_str else ''
-        
+
         meta_html = f'<div class="paper-meta"><strong>{conf}</strong> ({year})</div>'
-        
+
         score_parts = []
         if 'Similarity' in row and pd.notna(row['Similarity']):
             score_parts.append(f"Semantic Relevance: <strong>{row['Similarity']:.4f}</strong>")
@@ -233,15 +236,15 @@ def display_paper(row, highlight_query_str, index):
             score_parts.append(f"RecSys Relevance: <strong>{row['recsys_score']:.3f}</strong>")
         has_recommend = row.get('has_recommend_keyword', False)
         score_parts.append(f"Has 'recommend': <strong>{'Yes' if has_recommend else 'No'}</strong>")
-        
+
         scores_html = f'<div class="paper-scores">{" | ".join(score_parts)}</div>' if score_parts else ''
-        
+
         pills_html = generate_keyword_pills(keywords_str)
         if pills_html:
-            pills_html = f'<div style="margin-bottom: 10px;">{pills_html}</div>'
-            
+            pills_html = f'<div style="margin-bottom: 8px;">{pills_html}</div>'
+
         header_html = f"""
-        <div style="margin-bottom: 5px;">
+        <div style="margin-bottom: 4px;">
             {title_html}
             {author_html}
             {meta_html}
@@ -250,6 +253,14 @@ def display_paper(row, highlight_query_str, index):
         </div>
         """
         st.markdown(header_html, unsafe_allow_html=True)
+
+        # URL 링크는 별도 버튼으로 분리
+        btn_col, exp_col = st.columns([1, 4])
+        with btn_col:
+            if pd.notna(url) and url:
+                st.link_button("🔗 Open Paper", url)
+        with exp_col:
+            pass  # 여백 확보
 
         with st.expander("Abstract & Details"):
             abstract_text = row.get('Abstract', 'No abstract provided')
@@ -272,7 +283,7 @@ def display_paper(row, highlight_query_str, index):
 
 
 def main():
-    st.set_page_config(layout="centered", page_title="RecSys Paper Finder", page_icon="🔎")
+    st.set_page_config(layout="wide", page_title="RecSys Paper Finder", page_icon="🔎")
     st.title("RecSys Paper Finder")
     st.markdown(KEYWORD_CSS, unsafe_allow_html=True)
 
