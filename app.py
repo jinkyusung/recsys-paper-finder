@@ -628,7 +628,7 @@ def main():
         author_query = ""
 
     # Integrated Keyword Constraints (AND/OR) inside the Define block
-    must_include_query = st.text_input("Must Contain (AND)", placeholder="Required terms (e.g., bert, attention)", help="Papers MUST contain all these comma-separated terms.")
+    must_include_query = st.text_input("Must Contain (AND)", placeholder="Optional terms (e.g., bert, attention)", help="Papers MUST contain all these comma-separated terms.")
     any_include_query = st.text_input("Include Any (OR)", placeholder="Optional terms (e.g., graph, multi-modal)", help="Papers with ANY of these comma-separated terms.")
 
     # --- 3. Refinement Stage ---
