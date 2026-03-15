@@ -30,12 +30,16 @@ KEYWORD_CSS = """
 
     /* ── Paper entry (Google Scholar style, no box) ── */
     .gs-paper {
-        padding: 14px 0 6px 0;
+        padding: 8px 0 2px 0;
     }
     .gs-separator {
         border: none;
         border-top: 1px solid #e8e8e8;
-        margin: 8px 0 0 0;
+        margin: 4px 0 0 0;
+    }
+    /* Streamlit 기본 여백 축소 */
+    div[data-testid="stMarkdownContainer"] > div {
+        margin-bottom: 0 !important;
     }
 
     /* Title: blue, slightly larger, inline */
