@@ -250,8 +250,6 @@ def display_paper(row, highlight_query_str, index):
         meta_html = f'<div class="paper-meta"><strong>{conf}</strong> ({year})</div>'
 
         score_parts = []
-        if 'Similarity' in row and pd.notna(row['Similarity']):
-            score_parts.append(f"Semantic Relevance: <strong>{row['Similarity']:.4f}</strong>")
         if 'BM25_Score' in row and pd.notna(row['BM25_Score']):
             score_parts.append(f"BM25 Score: <strong>{row['BM25_Score']:.3f}</strong>")
         if 'recsys_score' in row and pd.notna(row['recsys_score']):
@@ -338,36 +336,42 @@ def main():
             
             st.altair_chart(chart, use_container_width=True)
         
+    # --- 검색 모드 선택 ---
     search_type = st.radio(
         "Search Mode:",
-        ('semantic', 'exact'), 
-        format_func=lambda x: {'semantic': 'Semantic (Primary Query + Filters)', 'exact': 'Exact (Filters Only)'}[x],
+        ('bm25', 'exact'),
+        format_func=lambda x: {
+            'bm25':  '🔍 BM25 (Ranked by Relevance)',
+            'exact': '🔎 Exact  (Keyword Filter Only)'
+        }[x],
         index=0,
-        horizontal=True 
+        horizontal=True
     )
 
-    query = st.text_input(
-        "Enter Semantic query (ignored in Exact mode):", 
-        placeholder="e.g., Graph Neural Network",
-        disabled=(search_type == 'exact')
+    # BM25 쿼리 입력 (Exact 모드에서는 비활성화)
+    bm25_query = st.text_input(
+        "BM25 Search Query:",
+        placeholder="e.g., graph neural network collaborative filtering",
+        disabled=(search_type == 'exact'),
+        help="Ranks results by BM25 relevance score across Title, Abstract, and Keywords."
     )
-    
+
+    # AND / OR 키워드 필터 (두 모드 공통)
     col_must, col_any = st.columns(2)
     with col_must:
         must_include_query = st.text_input(
             "Must-include keywords (AND)",
             placeholder="e.g., graph cf",
-            help="Space-separated. Results MUST contain ALL of these terms."
+            help="Space-separated. Results MUST contain ALL of these terms in Title / Abstract / Keywords."
         )
     with col_any:
         any_include_query = st.text_input(
             "Include-at-least-one (OR)",
             placeholder="e.g., privacy fairness",
-            help="Space-separated. Results MUST contain AT LEAST ONE of these terms."
+            help="Space-separated. Results MUST contain AT LEAST ONE of these terms in Title / Abstract / Keywords."
         )
 
     col2, col3 = st.columns(2)
-    
     with col2:
         if min_year < max_year:
             selected_year_range = st.slider(
@@ -379,10 +383,9 @@ def main():
         else:
             st.info(f"Data for year {min_year} only.")
             selected_year_range = (min_year, max_year)
-    
     with col3:
         top_k = st.number_input(
-            "Max Results to Display", 
+            "Max Results to Display",
             min_value=1,
             max_value=5000,
             value=50,
@@ -390,87 +393,65 @@ def main():
         )
 
     if st.button("Search"):
-        
+
         results_df = None
         highlight_query_str = ""
-        
-        # --- 공통 필터링 단계 (연도, AND, OR) ---
-        # 1. 연도 필터 적용
-        filtered_df = papers_df 
+
+        # --- 1. 연도 필터 ---
+        filtered_df = papers_df
         if min_year < max_year:
             start_year, end_year = selected_year_range
             filtered_df = filtered_df[
                 (filtered_df['Year_Num'] >= start_year) &
                 (filtered_df['Year_Num'] <= end_year)
             ]
-        
-        # 2. Must-Include (AND) 필터 적용
+
+        # --- 2. AND / OR 키워드 필터
+        #     search_corpus_lower = Title + Abstract + Keywords (References 제외)
         if must_include_query:
             filtered_df = filter_by_keywords(filtered_df, must_include_query, mode='AND')
-
-        # 3. Include-at-Least-One (OR) 필터 적용
         if any_include_query:
             filtered_df = filter_by_keywords(filtered_df, any_include_query, mode='OR')
 
-        # --- 모드별 최종 결과 생성 ---
-        if search_type == 'semantic':
-            if not query:
-                st.warning("Please enter a Semantic query to start.")
+        # --- 3. 모드별 랭킹 ---
+        if search_type == 'bm25':
+            if not bm25_query:
+                st.warning("Please enter a BM25 query to search.")
                 st.stop()
-            
-            # 4. Semantic: 필터링된 결과 내에서 유사도 계산 및 상위 K개 선택
             if not filtered_df.empty:
-                filtered_indices = filtered_df.index
-                filtered_embeddings = paper_embeddings[filtered_indices]
-                
-                query_embedding = model.encode(query, normalize_embeddings=True)
-                cos_scores = util.dot_score(query_embedding, filtered_embeddings)[0].numpy()
-                
-                filtered_df['Similarity'] = cos_scores
-                
-                results_df = filtered_df.sort_values(by='Similarity', ascending=False).head(top_k)
-            else:
-                results_df = filtered_df 
-
-            highlight_query_str = query 
-            
-        else: # search_type == 'exact'
-            # 4. Exact: AND/OR 필터 후 BM25로 랭킹
-            bm25_query = (must_include_query + " " + any_include_query).strip()
-            if bm25_query and bm25 is not None and not filtered_df.empty:
                 results_df = bm25_search(bm25, filtered_df, bm25_query, top_k=top_k)
             else:
-                results_df = filtered_df.head(top_k)
-
+                results_df = filtered_df
             highlight_query_str = bm25_query
 
-        # --- 결과 표시 ---
-            
+        else:  # exact — AND/OR 필터 결과를 그대로 사용 (추가 랭킹 없음)
+            if not must_include_query and not any_include_query:
+                st.warning("Exact mode requires at least one keyword filter (AND or OR).")
+                st.stop()
+            results_df = filtered_df.head(top_k)
+            highlight_query_str = (must_include_query + " " + any_include_query).strip()
+
+        # --- 4. 결과 표시 ---
         if results_df is None or results_df.empty:
-             st.info("No papers found matching all criteria.")
+            st.info("No papers found matching all criteria.")
         else:
             recsys_df = results_df[results_df['is_recsys']]
-            other_df = results_df[~results_df['is_recsys']]
-            
-            st.subheader(f"Search Results ({len(results_df)} total)") 
+            other_df  = results_df[~results_df['is_recsys']]
+
+            st.subheader(f"Search Results ({len(results_df)} total)")
 
             tab1, tab2 = st.tabs([
-                f"Recommender System Papers ({len(recsys_df)})", 
+                f"Recommender System Papers ({len(recsys_df)})",
                 f"Other Papers ({len(other_df)})"
             ])
 
-            # --- Recommender System Papers 탭 ---
             with tab1:
                 if recsys_df.empty:
                     st.info("No matching recommender system papers found.")
                 else:
-                    if search_type == 'semantic':
-                         recsys_df = recsys_df.sort_values(by='recsys_score', ascending=False)
-                    
                     for i, (_, row) in enumerate(recsys_df.iterrows(), 1):
                         display_paper(row, highlight_query_str, i)
 
-            # --- Other Papers 탭 ---
             with tab2:
                 if other_df.empty:
                     st.info("No matching other papers found.")
