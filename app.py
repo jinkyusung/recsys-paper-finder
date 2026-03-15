@@ -336,7 +336,7 @@ def load_search_database():
         df.loc[abstract_hits == 1, 'recsys_class'] = 'ambiguous'
         df.loc[(title_hits > 0) | (keyword_hits > 0) | (abstract_hits >= 2), 'recsys_class'] = 'recsys'
 
-        # BM25 index
+        # BM25 index - using space-splitting for the corpus words
         bm25 = BM25Okapi([doc.split() for doc in df['search_corpus_lower']])
 
         return df, min_year, max_year, summary_df, bm25
@@ -353,7 +353,9 @@ def load_search_database():
 
 def bm25_search(bm25, df, query_str, top_k=None):
     """Rank subset df by BM25 score for query_str, only returning matches."""
-    tokens = [t for t in query_str.lower().split() if t]
+    # Split by comma instead of spaces. 
+    # To keep BM25 working with the word-level index, we flatten the comma-separated parts into words.
+    tokens = [w for t in query_str.lower().split(',') if t.strip() for w in t.split()]
     if not tokens:
         return df
     
@@ -371,8 +373,8 @@ def bm25_search(bm25, df, query_str, top_k=None):
 
 
 def filter_by_keywords(df, query, mode='AND'):
-    """Hard keyword filter on search_corpus_lower."""
-    terms = [t for t in query.lower().split() if t]
+    """Hard keyword filter on search_corpus_lower. Splits query by comma."""
+    terms = [t.strip() for t in query.lower().split(',') if t.strip()]
     if not terms:
         return df
     if mode == 'AND':
@@ -487,7 +489,7 @@ def _render_abstract(text, highlight_query):
     if not highlight_query:
         return text
     try:
-        terms = [t for t in highlight_query.lower().split() if t]
+        terms = [t.strip() for t in highlight_query.lower().split(',') if t.strip()]
         if not terms:
             return text
         search_pattern = re.compile('|'.join(re.escape(t) for t in terms), re.IGNORECASE)
@@ -616,8 +618,8 @@ def main():
     if search_type == 'bm25':
         bm25_query = st.text_input(
             label="What are you looking for?",
-            placeholder="e.g., cross-domain recommendation reinforcement learning",
-            help="Results are ranked by semantic relevance to your natural language query."
+            placeholder="e.g., cross-domain recommendation, reinforcement learning",
+            help="Results are ranked by semantic relevance. Use commas to separate multiple terms."
         )
         author_query = ""
     elif search_type == 'author':
@@ -632,8 +634,8 @@ def main():
         author_query = ""
 
     # Integrated Keyword Constraints (AND/OR) inside the Define block
-    must_include_query = st.text_input("Must Contain (AND)", placeholder="Required terms", help="Papers MUST contain all these words.")
-    any_include_query = st.text_input("Include Any (OR)", placeholder="Optional terms", help="Papers with ANY of these words will be included.")
+    must_include_query = st.text_input("Must Contain (AND)", placeholder="Required terms (e.g., bert, attention)", help="Papers MUST contain all these comma-separated terms.")
+    any_include_query = st.text_input("Include Any (OR)", placeholder="Optional terms (e.g., graph, multi-modal)", help="Papers with ANY of these comma-separated terms.")
 
     # --- 3. Refinement Stage ---
     st.markdown('<div class="section-label">Refine Results</div>', unsafe_allow_html=True)
@@ -677,7 +679,7 @@ def main():
         
         # Step 2.1: Author filter
         if author_query:
-            terms = [t.strip().lower() for t in author_query.split() if t.strip()]
+            terms = [t.strip().lower() for t in author_query.split(',') if t.strip()]
         # Step 3: Handle Search Modes
         if search_type == 'bm25':
             if not bm25_query:
@@ -690,7 +692,7 @@ def main():
             if not author_query:
                 st.warning("Please enter an author name.")
                 st.stop()
-            terms = [t.strip().lower() for t in author_query.split() if t.strip()]
+            terms = [t.strip().lower() for t in author_query.split(',') if t.strip()]
             mask = pd.Series(True, index=filtered_df.index)
             for t in terms:
                 mask &= filtered_df['Author'].str.lower().str.contains(t, na=False)
@@ -702,7 +704,7 @@ def main():
                 st.warning("Exact mode requires at least one keyword filter.")
                 st.stop()
             results_df = filtered_df.head(top_k)
-            highlight_query_str = (must_include_query + ' ' + any_include_query).strip()
+            highlight_query_str = (must_include_query + ',' + any_include_query).strip(',')
 
         # Step 4: Display results
         if results_df is None or results_df.empty:
