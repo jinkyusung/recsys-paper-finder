@@ -33,13 +33,13 @@ APP_CSS = """
     .gs-index-col {
         min-width: 36px;
         max-width: 36px;
-        padding-top: 2px;
+        padding-top: 4px; /* Increased to align with larger title text */
         padding-right: 12px;
         text-align: right;
         color: #aaa;
         font-size: 0.80rem;
         font-weight: 400;
-        line-height: 1.6;
+        line-height: 1.4; /* Match title line-height for alignment */
         flex-shrink: 0;
     }
     /* Right: content column */
@@ -76,7 +76,30 @@ APP_CSS = """
     .gs-authors       { color: #2d6a2d; font-weight: 500; }
     .gs-venue         { color: #555; }
     .gs-dot           { color: #999; margin: 0 4px; }
-    .gs-scores-inline { color: #888; font-size: 0.79rem; }
+
+    /* Score Badges */
+    .score-badge {
+        display: inline-block;
+        padding: 0px 6px;
+        border-radius: 4px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-left: 6px;
+        vertical-align: middle;
+        line-height: 1.6;
+        letter-spacing: 0.03em;
+    }
+    .badge-bm25 {
+        background-color: #f1f3f4;
+        color: #5f6368;
+        border: 1px solid #dadce0;
+    }
+    .badge-rs {
+        background-color: #e8f0fe;
+        color: #1967d2;
+        border: 1px solid #c5d2f6;
+    }
 
     /* Keyword pills */
     .keyword-pill {
@@ -130,7 +153,8 @@ APP_CSS = """
         color: #1558d6;
         font-size: 0.82rem;
         font-weight: 500;
-        min-width: 50px; /* Keep consistent width */
+        min-width: 50px;
+        cursor: pointer;
     }
     .gs-toggle-btn:hover { text-decoration: underline; }
 
@@ -407,19 +431,24 @@ def display_paper(row, highlight_query_str, index):
         meta_parts.append(f'<span class="gs-authors">{author_display}</span>')
     meta_parts.append(f'<span class="gs-venue">{conf} ({year})</span>')
 
-    score_parts = []
+    badge_html = ""
     if 'BM25_Score' in row and pd.notna(row['BM25_Score']):
-        score_parts.append(f"BM25&nbsp;<strong>{row['BM25_Score']:.2f}</strong>")
+        badge_html += f'<span class="score-badge badge-bm25">BM25 {row["BM25_Score"]:.1f}</span>'
     if 'recsys_match_count' in row and pd.notna(row['recsys_match_count']):
-        score_parts.append(f"RS Match&nbsp;<strong>{int(row['recsys_match_count'])}</strong>")
-    meta_parts.append(f'<span class="gs-scores-inline">{" · ".join(score_parts)}</span>')
+        badge_html += f'<span class="score-badge badge-rs">RS Match {int(row["recsys_match_count"])}</span>'
 
-    meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
+    meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + badge_html + '</div>'
 
     # Combined Action Row logic
     pills_html = generate_keyword_pills(keywords_str)
     
-    # Simple assembly using the new CSS structure
+    # Abstract versions: plain for preview, highlighted for full view
+    raw_abstract    = row.get('Abstract', '')
+    plain_abs       = clean_latex(raw_abstract)
+    highlighted_abs = _render_abstract(raw_abstract, highlight_query_str)
+
+    # Simplified HTML: Actions row stays in summary (always visible)
+    # The full content box appears below it when open.
     abstract_section = f'''
     <details class="gs-paper-toggle">
         <summary>
@@ -429,13 +458,7 @@ def display_paper(row, highlight_query_str, index):
                 {pills_html}
             </div>
         </summary>
-        <div class="gs-full-content">
-            <div class="gs-actions-row">
-                <span class="gs-toggle-btn"></span>
-                {pills_html}
-            </div>
-            <div class="gs-abstract-full-box">{highlighted_abs}</div>
-        </div>
+        <div class="gs-abstract-full-box">{highlighted_abs}</div>
     </details>
     '''
 
