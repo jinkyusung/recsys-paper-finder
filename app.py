@@ -9,7 +9,7 @@ import altair as alt
 
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
-RECSYS_KEYWORDS_RAW      = ['recommend', 'collaborative filtering', 'cf', 'matrix factorization', 'personalization', 'personalized']
+RECSYS_KEYWORDS_RAW      = ['recommend', 'collaborative filtering', 'cf', 'matrix factorization']
 RECSYS_MASTER_REGEX      = re.compile('|'.join(RECSYS_KEYWORDS_RAW), re.IGNORECASE)
 RECOMMEND_ONLY_REGEX     = re.compile(r'recommend', re.IGNORECASE)
 
@@ -78,17 +78,18 @@ APP_CSS = """
     /* Keyword pills */
     .keyword-pill {
         display: inline-block;
+        vertical-align: middle; /* Fix: Match toggle alignment */
         background-color: #f1f3f4;
         color: #3c4043;
         padding: 2px 9px;
-        margin: 2px 5px 4px 0;
+        margin: 2px 0; /* Simpler margin */
         border-radius: 10px;
         font-size: 0.76rem;
         font-weight: 500;
         border: 1px solid #dadce0;
     }
 
-    /* Bottom row: keywords + abstract toggle */
+    /* Bottom row: keywords */
     .gs-bottom-row {
         display: flex;
         flex-wrap: wrap;
@@ -97,31 +98,47 @@ APP_CSS = """
         margin: 4px 0 2px;
     }
 
-    /* Abstract toggle (<details>) */
-    details.gs-toggle { display: inline-block; vertical-align: middle; margin: 2px 0 4px 0; }
+    /* Abstract Snippet & Toggle */
+    .gs-snippet-container {
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: #444;
+        margin-bottom: 4px;
+    }
+    .gs-snippet-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 2; /* Show only 2 lines */
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline; /* Keep inline with toggle */
+    }
+    
+    details.gs-toggle { display: inline; }
     details.gs-toggle > summary {
         display: inline-block;
         cursor: pointer;
         color: #1558d6;
-        font-size: 0.78rem;
+        font-size: 0.85rem;
         font-weight: 500;
-        padding: 2px 9px;
-        border-radius: 10px;
-        border: 1px solid #c5d2f6;
-        background: #f0f4ff;
         list-style: none;
         user-select: none;
+        margin-left: 4px;
     }
-    details.gs-toggle > summary::-webkit-details-marker { display: none; }
-    details.gs-toggle > summary::after       { content: " ▾"; font-size: 0.70rem; }
-    details.gs-toggle[open] > summary::after { content: " ▴"; font-size: 0.70rem; }
-    details.gs-toggle > summary:hover { background: #dce6ff; }
-    .gs-abstract-body {
+    details.gs-toggle > summary:hover { text-decoration: underline; }
+    details.gs-toggle > summary::after { content: " ▾"; }
+    details.gs-toggle[open] > summary { display: none; } /* Hide the 'More' link when open */
+
+    .gs-abstract-full {
         margin-top: 8px;
         font-size: 0.90rem;
         line-height: 1.65;
         color: #3c4043;
-        padding: 8px 4px 4px 4px;
+        padding: 10px 14px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 3px solid #1558d6;
+        display: block;
     }
 
     /* Keyword highlight (Search results) */
@@ -190,11 +207,23 @@ def load_search_database():
             df['Keywords'].str.lower()
         )
 
-        # RecSys classification via keyword match count
-        df['recsys_match_count'] = df['search_corpus_lower'].apply(
-            lambda x: len(RECSYS_MASTER_REGEX.findall(x)) if isinstance(x, str) else 0
-        )
-        df['is_recsys'] = df['recsys_match_count'] > 0
+        # RecSys classification via granular keyword match count
+        def get_hits(text):
+            if not text: return 0
+            return len(RECSYS_MASTER_REGEX.findall(text.lower()))
+
+        title_hits    = df['Title'].apply(get_hits)
+        keyword_hits  = df['Keywords'].apply(get_hits)
+        abstract_hits = df['Abstract'].apply(get_hits)
+
+        # Classification Logic:
+        # 1. Strict RS: Title match > 0 OR Keywords match > 0 OR Abstract match >= 2
+        # 2. Ambiguous: (NOT Strict) AND Abstract match == 1
+        df['recsys_match_count'] = title_hits + keyword_hits + abstract_hits
+        
+        df['recsys_class'] = 'other'
+        df.loc[abstract_hits == 1, 'recsys_class'] = 'ambiguous'
+        df.loc[(title_hits > 0) | (keyword_hits > 0) | (abstract_hits >= 2), 'recsys_class'] = 'recsys'
 
         # BM25 index
         bm25 = BM25Okapi([doc.split() for doc in df['search_corpus_lower']])
@@ -244,6 +273,41 @@ def filter_by_keywords(df, query, mode='AND'):
 # Display helpers
 # ---------------------------------------------------------------------------
 
+def clean_latex(text):
+    """Remove LaTeX/BibTeX escaping backslashes outside of math formulas ($...$)."""
+    if not text or not isinstance(text, str):
+        return text
+    
+    # 1. Protect math formulas ($...$) to preserve LaTeX commands inside them
+    math_blocks = []
+    def save_math(m):
+        math_blocks.append(m.group(0))
+        return f"__MATH_LATEX_{len(math_blocks)-1}__"
+    
+    # Find $...$ blocks
+    text = re.sub(r'\$.*?\$', save_math, text)
+    
+    # 2. Clean outside math blocks
+    # Remove escaping backslashes for special characters: \&, \%, \_, \{, \}
+    text = re.sub(r'\\([&%_{}])', r'\1', text)
+    
+    # Replace LaTeX accent commands: \'{o}, \"{a}, \v{s} -> o, a, s
+    text = re.sub(r"\\(?:['\"^`~vh])\{([a-zA-Z])\}", r"\1", text)
+    text = re.sub(r"\\(?:['\"^`~vh])([a-zA-Z])", r"\1", text)
+    
+    # Remove remaining backslashes that are not part of a word (junk)
+    text = re.sub(r'\\(?![a-zA-Z])', '', text)
+    
+    # Remove BibTeX grouping braces: {BERT} -> BERT
+    text = text.replace('{', '').replace('}', '')
+
+    # 3. Restore math blocks
+    for i, block in enumerate(math_blocks):
+        text = text.replace(f"__MATH_LATEX_{i}__", block)
+        
+    return text
+
+
 def generate_keyword_pills(keywords_str):
     if not keywords_str or pd.isna(keywords_str):
         return ''
@@ -272,6 +336,9 @@ def _render_abstract(text, highlight_query):
     if not text:
         return '<em>No abstract provided.</em>'
     
+    # Clean LaTeX junk first
+    text = clean_latex(text)
+    
     # 1. Highlight RecSys terms (Blue)
     try:
         # Use RECSYS_KEYWORDS_RAW defined above
@@ -299,7 +366,7 @@ def _render_abstract(text, highlight_query):
 
 def display_paper(row, highlight_query_str, index):
     """Return a single paper card HTML in Google Scholar style."""
-    title        = row.get('Title', 'No Title')
+    title        = clean_latex(row.get('Title', 'No Title'))
     url          = row.get('url', '')
     conf         = row.get('Conference Name (Book Title)', 'N/A')
     year         = row.get('Year', 'N/A')
@@ -328,21 +395,30 @@ def display_paper(row, highlight_query_str, index):
 
     meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
-    # Bottom row: keyword pills + abstract toggle
-    pills_html        = generate_keyword_pills(keywords_str)
-    rendered_abstract = _render_abstract(row.get('Abstract', ''), highlight_query_str)
-    abstract_toggle   = (
-        f'<details class="gs-toggle">'
-        f'<summary>Abstract</summary>'
-        f'<div class="gs-abstract-body">{rendered_abstract}</div>'
-        f'</details>'
-    )
-    bottom_row = f'<div class="gs-bottom-row">{pills_html}{abstract_toggle}</div>'
+    # Abstract Snippet logic
+    raw_abstract = row.get('Abstract', '')
+    cleaned_abs  = clean_latex(raw_abstract)
+    rendered_abs = _render_abstract(raw_abstract, highlight_query_str) # This handles highlight + latex clean
+    
+    # We show it as a snippet + a hidden full version
+    snippet_html = f'''
+    <div class="gs-snippet-container">
+        <span class="gs-snippet-text">{rendered_abs}</span>
+        <details class="gs-toggle">
+            <summary>Abstract</summary>
+            <div class="gs-abstract-full">{rendered_abs}</div>
+        </details>
+    </div>
+    '''
+
+    # Keywords row
+    pills_html = generate_keyword_pills(keywords_str)
+    bottom_row = f'<div class="gs-bottom-row">{pills_html}</div>'
 
     return (
         f'<div class="gs-paper">'
         f'  <div class="gs-index-col">{index}</div>'
-        f'  <div class="gs-content-col">{title_html}{meta_html}{bottom_row}</div>'
+        f'  <div class="gs-content-col">{title_html}{meta_html}{snippet_html}{bottom_row}</div>'
         f'</div>'
     )
 
@@ -447,31 +523,36 @@ def main():
         if results_df is None or results_df.empty:
             st.info("No papers found matching all criteria.")
         else:
-            recsys_df = results_df[results_df['is_recsys']]
-            other_df  = results_df[~results_df['is_recsys']]
+            recsys_df    = results_df[results_df['recsys_class'] == 'recsys']
+            ambiguous_df = results_df[results_df['recsys_class'] == 'ambiguous']
+            other_df     = results_df[results_df['recsys_class'] == 'other']
 
             st.subheader(f"Search Results ({len(results_df)} total)")
-            tab1, tab2 = st.tabs([
-                f"Recommender System Papers ({len(recsys_df)})",
+            tab1, tab2, tab3 = st.tabs([
+                f"RS Papers ({len(recsys_df)})",
+                f"Potential RS? ({len(ambiguous_df)})",
                 f"Other Papers ({len(other_df)})"
             ])
             with tab1:
                 if recsys_df.empty:
                     st.info("No matching recommender system papers found.")
                 else:
-                    html = ''.join(
-                        display_paper(row, highlight_query_str, i)
-                        for i, (_, row) in enumerate(recsys_df.iterrows(), 1)
-                    )
+                    html = ''.join(display_paper(row, highlight_query_str, i)
+                                   for i, (_, row) in enumerate(recsys_df.iterrows(), 1))
                     st.markdown(html, unsafe_allow_html=True)
             with tab2:
+                if ambiguous_df.empty:
+                    st.info("No ambiguous/potential RS papers found.")
+                else:
+                    html = ''.join(display_paper(row, highlight_query_str, i)
+                                   for i, (_, row) in enumerate(ambiguous_df.iterrows(), 1))
+                    st.markdown(html, unsafe_allow_html=True)
+            with tab3:
                 if other_df.empty:
                     st.info("No matching other papers found.")
                 else:
-                    html = ''.join(
-                        display_paper(row, highlight_query_str, i)
-                        for i, (_, row) in enumerate(other_df.iterrows(), 1)
-                    )
+                    html = ''.join(display_paper(row, highlight_query_str, i)
+                                   for i, (_, row) in enumerate(other_df.iterrows(), 1))
                     st.markdown(html, unsafe_allow_html=True)
 
 
