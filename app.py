@@ -3,9 +3,16 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import logging
 from sentence_transformers import SentenceTransformer, util
 from rank_bm25 import BM25Okapi
 import altair as alt
+
+# HF Hub 미인증 경고 억제
+os.environ.setdefault('HF_HUB_DISABLE_IMPLICIT_TOKEN', '1')
+# sentence-transformers BertModel LOAD REPORT 억제
+logging.getLogger('sentence_transformers').setLevel(logging.ERROR)
+logging.getLogger('transformers').setLevel(logging.ERROR)
 
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
@@ -50,18 +57,6 @@ APP_CSS = """
         border: none;
         border-top: 1px solid #e8e8e8;
         margin: 2px 0 0 0;
-    }
-
-    /* Reduce Streamlit's default inter-element margins */
-    div[data-testid="stVerticalBlock"] > div[data-testid="element-container"] {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    div[data-testid="stVerticalBlock"] > div[data-testid="element-container"] > div {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
     }
 
     /* Title */
@@ -310,7 +305,7 @@ def _render_abstract(text, highlight_query):
 
 
 def display_paper(row, highlight_query_str, index):
-    """Render a single paper card in Google Scholar style."""
+    """Return a single paper card HTML in Google Scholar style."""
     title        = row.get('Title', 'No Title')
     url          = row.get('url', '')
     conf         = row.get('Conference Name (Book Title)', 'N/A')
@@ -343,9 +338,9 @@ def display_paper(row, highlight_query_str, index):
     meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
     # Bottom row: keyword pills + abstract toggle
-    pills_html       = generate_keyword_pills(keywords_str)
+    pills_html        = generate_keyword_pills(keywords_str)
     rendered_abstract = _render_abstract(row.get('Abstract', ''), highlight_query_str)
-    abstract_toggle  = (
+    abstract_toggle   = (
         f'<details class="gs-toggle">'
         f'<summary>Abstract</summary>'
         f'<div class="gs-abstract-body">{rendered_abstract}</div>'
@@ -353,13 +348,12 @@ def display_paper(row, highlight_query_str, index):
     )
     bottom_row = f'<div class="gs-bottom-row">{pills_html}{abstract_toggle}</div>'
 
-    st.markdown(
+    return (
         f'<div class="gs-paper">'
         f'  <div class="gs-index-col">{index}</div>'
         f'  <div class="gs-content-col">{title_html}{meta_html}{bottom_row}</div>'
         f'</div>'
-        f'<hr class="gs-separator">',
-        unsafe_allow_html=True
+        f'<hr class="gs-separator">'
     )
 
 
@@ -393,7 +387,7 @@ def main():
                 tooltip=['Conference', 'Year', 'Paper Count']
             )
             st.altair_chart(base.mark_line() + base.mark_point(size=100, filled=True),
-                            use_container_width=True)
+                            width='stretch')
 
     # Search mode
     search_type = st.radio(
@@ -479,14 +473,20 @@ def main():
                 if recsys_df.empty:
                     st.info("No matching recommender system papers found.")
                 else:
-                    for i, (_, row) in enumerate(recsys_df.iterrows(), 1):
+                    html = ''.join(
                         display_paper(row, highlight_query_str, i)
+                        for i, (_, row) in enumerate(recsys_df.iterrows(), 1)
+                    )
+                    st.markdown(html, unsafe_allow_html=True)
             with tab2:
                 if other_df.empty:
                     st.info("No matching other papers found.")
                 else:
-                    for i, (_, row) in enumerate(other_df.iterrows(), 1):
+                    html = ''.join(
                         display_paper(row, highlight_query_str, i)
+                        for i, (_, row) in enumerate(other_df.iterrows(), 1)
+                    )
+                    st.markdown(html, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
