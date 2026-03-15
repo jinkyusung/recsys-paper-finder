@@ -30,8 +30,12 @@ KEYWORD_CSS = """
 
     /* ── Paper entry (Google Scholar style, no box) ── */
     .gs-paper {
-        padding: 14px 0 10px 0;
-        border-bottom: 1px solid #e8e8e8;
+        padding: 14px 0 6px 0;
+    }
+    .gs-separator {
+        border: none;
+        border-top: 1px solid #e8e8e8;
+        margin: 8px 0 0 0;
     }
 
     /* Title: blue, slightly larger, inline */
@@ -66,6 +70,7 @@ KEYWORD_CSS = """
     .gs-authors { color: #2d6a2d; font-weight: 500; }
     .gs-venue   { color: #555; }
     .gs-dot     { color: #999; margin: 0 4px; }
+    .gs-scores-inline { color: #888; font-size: 0.79rem; }
 
     /* Scores */
     .gs-scores {
@@ -301,39 +306,44 @@ def display_paper(row, highlight_query_str, index):
     ext_link = f'<a class="gs-ext-link" href="{url}" target="_blank" title="Open paper">↗</a>' if has_url else ''
     title_html = f'<div class="gs-title">{index}. {title}{ext_link}</div>'
 
-    # ── 저자 (첫 저자 et al.) · 학회 (연도) ──
+    # ── 저자 (첫 저자 et al.) · 학회 (연도) · 점수 (같은 줄) ──
     author_display = _first_author(author_str)
     meta_parts = []
     if author_display:
         meta_parts.append(f'<span class="gs-authors">{author_display}</span>')
     meta_parts.append(f'<span class="gs-venue">{conf} ({year})</span>')
-    meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
-    # ── 점수 ──
+    # 점수를 venue 바로 옆에 표시
     score_parts = []
     if 'BM25_Score' in row and pd.notna(row['BM25_Score']):
-        score_parts.append(f"BM25: <strong>{row['BM25_Score']:.2f}</strong>")
+        score_parts.append(f"BM25&nbsp;<strong>{row['BM25_Score']:.2f}</strong>")
     if 'recsys_score' in row and pd.notna(row['recsys_score']):
-        score_parts.append(f"RecSys: <strong>{row['recsys_score']:.3f}</strong>")
+        score_parts.append(f"RecSys&nbsp;<strong>{row['recsys_score']:.3f}</strong>")
     has_recommend = row.get('has_recommend_keyword', False)
-    score_parts.append(f"'recommend': <strong>{'✓' if has_recommend else '✗'}</strong>")
-    scores_html = f'<div class="gs-scores">{" &nbsp;|&nbsp; ".join(score_parts)}</div>'
+    score_parts.append(f"rec&nbsp;<strong>{'✓' if has_recommend else '✗'}</strong>")
+    if score_parts:
+        meta_parts.append(f'<span class="gs-scores-inline">{" · ".join(score_parts)}</span>')
+
+    meta_html = '<div class="gs-meta">' + '<span class="gs-dot">·</span>'.join(meta_parts) + '</div>'
 
     # ── 키워드 필 ──
     pills_html = generate_keyword_pills(keywords_str)
     pills_block = f'<div style="margin: 4px 0 2px;">{pills_html}</div>' if pills_html else ''
 
-    # ── 완성 HTML 출력 ──
+    # ── 완성 HTML 출력 (제목 + 메타+점수 + 키워드) ──
     st.markdown(
-        f'<div class="gs-paper">{title_html}{meta_html}{scores_html}{pills_block}</div>',
+        f'<div class="gs-paper">{title_html}{meta_html}{pills_block}</div>',
         unsafe_allow_html=True
     )
 
-    # ── Abstract 토글 (expander) ──
+    # ── Abstract 토글 (키워드 다음, 구분선 전) ──
     with st.expander("Abstract"):
         abstract_text = row.get('Abstract', '')
         rendered = _render_abstract(abstract_text, highlight_query_str)
         st.markdown(f'<div class="abstract-text">{rendered}</div>', unsafe_allow_html=True)
+
+    # ── 구분선 (Abstract 토글 이후) ──
+    st.markdown('<hr class="gs-separator">', unsafe_allow_html=True)
 
 
 def main():
