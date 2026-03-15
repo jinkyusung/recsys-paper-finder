@@ -708,7 +708,7 @@ def main():
             ambiguous_df = results_df[results_df['recsys_class'] == 'ambiguous']
             other_df     = results_df[results_df['recsys_class'] == 'other']
 
-            st.subheader(f"Search Results ({len(results_df)} total)")
+            st.markdown(f'<div class="section-label">Search Results ({len(results_df)} total)</div>', unsafe_allow_html=True)
             tab1, tab2, tab3 = st.tabs([
                 f"RecSys Papers ({len(recsys_df)})",
                 f"Potential RecSys ({len(ambiguous_df)})",
