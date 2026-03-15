@@ -6,6 +6,7 @@ import re
 import logging
 from rank_bm25 import BM25Okapi
 import altair as alt
+from update import sync_csv_files, sync_database
 
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
@@ -272,6 +273,14 @@ APP_CSS = """
     }
 </style>
 """
+
+def get_db_mtime():
+    if os.path.exists(DB_FILE):
+        import datetime
+        mtime = os.path.getmtime(DB_FILE)
+        return datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    return "Never"
+
 
 
 # ---------------------------------------------------------------------------
@@ -584,6 +593,24 @@ def main():
     st.markdown('<div class="app-title">RecSys Paper Finder</div>', unsafe_allow_html=True)
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
+    # --- 0. Database Maintenance (Formerly in Sidebar) ---
+    with st.expander("Database Sync & Maintenance", expanded=False):
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.markdown(f"""
+                <div style="font-size: 0.85rem; color: #5f6368; margin-bottom: 2px;">
+                Update your paper database by parsing current BibTeX files in the `bibtex/` folder.<br>
+                <b>Last updated:</b> {get_db_mtime()}
+                </div>
+            """, unsafe_allow_html=True)
+        with c2:
+            if st.button("Sync Now", use_container_width=True, type="secondary"):
+                with st.spinner("Syncing Database..."):
+                    sync_csv_files(force_rebuild=False)
+                    sync_database(force_rebuild=False)
+                    st.cache_data.clear()
+                st.success("Database synced successfully!")
+                st.rerun()
 
     papers_df, min_year, max_year, summary_df, bm25 = load_search_database()
 
