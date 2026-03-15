@@ -5,7 +5,6 @@ import glob
 import re
 import argparse
 import pandas as pd
-import numpy as np
 
 # --- Constants ---
 BIBTEX_DIR = 'bibtex'
@@ -74,7 +73,7 @@ def sync_csv_files(force_rebuild=False):
     for bib_path in bib_files:
         rel_path = os.path.relpath(bib_path, BIBTEX_DIR)
         
-        conf_name = os.path.basename(os.path.dirname(bib_path))
+        conf_name = os.path.normpath(rel_path).split(os.sep)[0]
         
         csv_rel_path = os.path.splitext(rel_path)[0] + '.csv'
         csv_path = os.path.join(PAPERS_DIR, csv_rel_path)

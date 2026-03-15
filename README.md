@@ -1,16 +1,18 @@
 # RecSys Paper Finder 🔎
 
-RecSys Paper Finder is a Streamlit-based web application designed to help researchers efficiently search and filter academic papers, with a particular focus on Recommender Systems (RecSys). 
+**RecSys Paper Finder** is a public, non-commercial project designed to easily search and filter academic papers, focusing specifically on Recommender Systems (RecSys).
 
-Users can populate the database using their own BibTeX (`.bib`) files and leverage natural language processing to perform semantic and keyword-based searches to discover relevant papers.
+🔗 **Live Deployment:** [https://recsys-paper-finder.streamlit.app/](https://recsys-paper-finder.streamlit.app/)
+
+Users can populate the database using their own BibTeX (`.bib`) files and leverage natural language processing to perform keyword-based and ranking-based searches to discover relevant papers.
 
 ## Features
 
-- **Semantic Search**: Uses the `all-MiniLM-L6-v2` SentenceTransformer model to understand the meaning of your queries, not just exact keyword matches.
+- **Semantic Discovery & Ranking**: Uses the `BM25Okapi` algorithm (BM25) to effectively rank papers based on the relevance of your search queries.
 - **Keyword Filtering**: Support for strict matching (AND/OR filtering logic) for specified keywords.
 - **Year Filtering**: Easily narrow down your paper results by publication year.
-- **Automated Processing**: `update.py` script automatically converts `.bib` files to `.csv` and incrementally computes embeddings for semantic search.
-- **RecSys Focused**: Automatically categorizes search results into "Recommender System Papers" and "Other Papers" using domain-specific heuristics and similarity to the "recsys" concept.
+- **Automated Processing**: The `update.py` script automatically converts nested `.bib` files within conference folders to `.csv` and updates the central database.
+- **RecSys Focused**: Automatically categorizes search results into "Recommender System Papers" and "Other Papers" using domain-specific keyword heuristics.
 - **Analytics View**: Visualizes your library by conference and publication year using Altair.
 
 ## Project Structure
@@ -22,8 +24,7 @@ recsys-paper-finder/
 ├── requirements.txt            # Python dependencies
 ├── bibtex/                     # [Your input] Directory to store source .bib files
 ├── papers/                     # [Auto-generated] Directory where converted .csv files are stored
-├── paper_database.parquet      # [Auto-generated] Compiled database of all processed papers
-└── paper_embeddings.npy        # [Auto-generated] Pre-computed embeddings for fast semantic search
+└── paper_database.parquet      # [Auto-generated] Compiled database of all processed papers
 ```
 
 ## Setup & Installation
@@ -49,12 +50,13 @@ bibtex/
   ├── sigir/
   │   └── sigir_2023.bib
   ├── kdd/
-  │   └── kdd_2022.bib
+  │   └── 2022/
+  │       └── kdd_2022.bib
 ```
-*Note: The script uses the folder names under `bibtex/` as the Conference/Book Title names (e.g., "sigir", "kdd").*
+*Note: The script automatically uses the first-level folder names under `bibtex/` as the Conference/Book Title names (e.g., "sigir", "kdd"), regardless of how deeply nested the `.bib` files are.*
 
 ### 2. Build the Database
-Run the update script to parse your BibTeX files, convert them to CSV format, and compute the paper embeddings:
+Run the update script to parse your BibTeX files, convert them to CSV format, and build the database:
 ```bash
 python update.py
 ```
@@ -73,6 +75,6 @@ This will open the user interface in your web browser (usually at `http://localh
 ## Dependencies
 - `streamlit` - For the web interface.
 - `pandas` & `pyarrow` - For data processing and `.parquet` file storage.
-- `numpy` & `sentence-transformers` - For managing arrays and calculating textual similarity.
+- `rank_bm25` - For the BM25Okapi search ranking algorithm.
 - `altair` - For visualizing paper count metrics.
 - `bibtexparser` - For parsing the `.bib` files.
