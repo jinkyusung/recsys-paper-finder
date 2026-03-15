@@ -6,7 +6,6 @@ import re
 import logging
 from rank_bm25 import BM25Okapi
 import altair as alt
-from update import sync_csv_files, sync_database
 
 # --- Constants ---
 DB_FILE        = 'paper_database.parquet'
@@ -585,34 +584,6 @@ def main():
     st.markdown('<div class="app-title">RecSys Paper Finder</div>', unsafe_allow_html=True)
     st.markdown(APP_CSS, unsafe_allow_html=True)
 
-    with st.sidebar:
-        st.subheader("Database Management")
-        
-        # Display Last Update Time
-        if os.path.exists(DB_FILE):
-            last_update = os.path.getmtime(DB_FILE)
-            import datetime
-            st.info(f"Last updated: {datetime.datetime.fromtimestamp(last_update).strftime('%Y-%m-%d %H:%M')}")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Quick Sync", help="Only process new or changed files"):
-                with st.spinner("Syncing..."):
-                    sync_csv_files()
-                    sync_database()
-                    st.cache_data.clear()
-                    st.success("Sync complete!")
-                    st.rerun()
-        with col2:
-            if st.button("Full Rebuild", help="Rebuild entire database (takes longer)"):
-                with st.spinner("Rebuilding..."):
-                    sync_csv_files(force_rebuild=True)
-                    sync_database(force_rebuild=True)
-                    st.cache_data.clear()
-                    st.success("Rebuild complete!")
-                    st.rerun()
-        
-        st.divider()
 
     papers_df, min_year, max_year, summary_df, bm25 = load_search_database()
 
