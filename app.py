@@ -360,7 +360,9 @@ def bm25_search(bm25, df, query_str, top_k=None):
     # To keep BM25 working with the word-level index, we flatten the comma-separated parts into words.
     tokens = [w for t in query_str.lower().split(',') if t.strip() for w in t.split()]
     if not tokens:
-        return df
+        # Default: Sort by year descending if no query
+        result = df.sort_values('Year_Num', ascending=False)
+        return result.head(top_k) if top_k else result
     
     # Get scores and filter out non-matches (0.0)
     all_scores = bm25.get_scores(tokens)
@@ -594,7 +596,7 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🔄 Quick Sync", help="Only process new or changed files"):
+            if st.button("Quick Sync", help="Only process new or changed files"):
                 with st.spinner("Syncing..."):
                     sync_csv_files()
                     sync_database()
@@ -602,7 +604,7 @@ def main():
                     st.success("Sync complete!")
                     st.rerun()
         with col2:
-            if st.button("🔥 Full Rebuild", help="Rebuild entire database (takes longer)"):
+            if st.button("Full Rebuild", help="Rebuild entire database (takes longer)"):
                 with st.spinner("Rebuilding..."):
                     sync_csv_files(force_rebuild=True)
                     sync_database(force_rebuild=True)
@@ -713,9 +715,6 @@ def main():
             terms = [t.strip().lower() for t in author_query.split(',') if t.strip()]
         # Step 3: Handle Search Modes
         if search_type == 'bm25':
-            if not bm25_query:
-                st.warning("Please enter a BM25 query.")
-                st.stop()
             results_df = bm25_search(bm25, filtered_df, bm25_query, top_k=top_k) if not filtered_df.empty else filtered_df
             highlight_query_str = bm25_query
             
