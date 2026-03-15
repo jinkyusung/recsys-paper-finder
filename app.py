@@ -619,7 +619,7 @@ def main():
     elif search_type == 'author':
         author_query = st.text_input(
             label="Enter Author Name",
-            placeholder="e.g., Steffen Rendle",
+            placeholder="e.g., Xiangnan He",
             help="Find specific researchers in the RecSys community."
         )
         bm25_query = ""
